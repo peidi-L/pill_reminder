@@ -1,5 +1,6 @@
 # Pill Reminder App
-# This is a simple pill reminder application that helps users keep track of their medication schedule. The app allows users to set reminders for taking their pills at specific times and provides notifications to ensure they don't miss a dose.
+# This is a simple pill reminder application that helps users keep track of their medication schedule.
+# Keep the app open for the reminder popup to appear at the saved time.
 
 import tkinter as tk
 from datetime import date, datetime
@@ -37,11 +38,10 @@ app_data = load_data()
 reminder_time = app_data.get("reminder_time", "21:00")
 last_taken = app_data.get("last_taken")
 last_taken_time = app_data.get("last_taken_time")
-reminder_shown_for = app_data.get("reminder_shown_for")
 
 window = tk.Tk()
 window.title("Pill Reminder")
-window.geometry("420x320")
+window.geometry("440x360")
 
 title_label = tk.Label(window, text="Pill Reminder", font=("Helvetica", 20, "bold"))
 title_label.pack(pady=(20, 8))
@@ -97,6 +97,14 @@ def mark_taken():
     status_label.config(text=f"Taken: {time_taken:%Y-%m-%d at %H:%M}")
 
 
+def reset_today():
+    app_data.pop("last_taken", None)
+    app_data.pop("last_taken_time", None)
+    app_data.pop("reminder_shown_for", None)
+    save_data()
+    status_label.config(text="Status: not taken today")
+
+
 def check_reminder():
     now = datetime.now()
     today = now.date().isoformat()
@@ -118,6 +126,9 @@ save_button.pack(pady=4)
 
 taken_button = tk.Button(window, text="Taken Today", command=mark_taken)
 taken_button.pack(pady=8)
+
+reset_button = tk.Button(window, text="Reset Today", command=reset_today)
+reset_button.pack(pady=4)
 
 check_reminder()
 
