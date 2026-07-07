@@ -4,7 +4,7 @@ import sys
 import tkinter as tk
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
 
 APP_NAME = "Pill Reminder"
@@ -34,20 +34,13 @@ BORDER_COLOR = "#88a1aa"
 
 COMMON_PILL_NAMES = [
     "Birth Control Pill",
-    "Combined Pill",
+    "My Daily Pill",
+    "Combined Birth Control Pill",
     "Mini Pill",
-    "Alesse",
-    "Aviane",
-    "Yaz",
-    "Yasmin",
-    "Lo Loestrin Fe",
-    "Ortho Tri-Cyclen",
-    "Sprintec",
-    "Junel Fe",
-    "Nikki",
-    "Errin",
-    "Heather",
-    "Norethindrone",
+    "Progestin-Only Pill",
+    "Morning Pill",
+    "Evening Pill",
+    "Custom Pill Name",
 ]
 
 
@@ -154,6 +147,25 @@ def relative_due_text(due):
         return f"in {minutes // 60}h {minutes % 60}m"
 
     return f"in {minutes}m"
+
+
+def time_to_minutes(value):
+    hour, minute = value.split(":")
+    return int(hour) * 60 + int(minute)
+
+
+def friendly_due_text(due):
+    today = date.today()
+
+    if due.date() == today:
+        day_text = "Today"
+    elif due.date() == today + timedelta(days=1):
+        day_text = "Tomorrow"
+    else:
+        day_text = due.strftime("%A, %b %d")
+
+    time_text = due.strftime("%I:%M %p").lstrip("0")
+    return f"{day_text} at {time_text}"
 
 
 class PillReminderApp:
@@ -333,18 +345,38 @@ class PillReminderApp:
         )
         self.next_label = tk.Label(next_box, text="", bg="#eef6f4", fg=TEXT_COLOR, font=("Helvetica", 24, "bold"))
         self.next_label.grid(row=1, column=0, pady=(4, 0))
+        self.next_detail_label = tk.Label(next_box, text="", bg="#eef6f4", fg=MUTED_COLOR, font=("Helvetica", 13, "bold"))
+        self.next_detail_label.grid(row=2, column=0, pady=(4, 0))
+        self.current_reminder_label = tk.Label(
+            next_box,
+            text="",
+            bg="#eef6f4",
+            fg=TEXT_COLOR,
+            font=("Helvetica", 13, "bold"),
+        )
+        self.current_reminder_label.grid(row=3, column=0, pady=(8, 0))
 
         take_button = self.button(card, "TAKE PILL", self.mark_taken, row=5, column=0, primary=True, sticky="ew", ipady=14)
         take_button.config(font=("Helvetica", 20, "bold"))
 
         secondary = tk.Frame(card, bg=PANEL_BG)
         secondary.grid(row=6, column=0, pady=(24, 0))
-        self.button(secondary, "Edit pill name / time", self.open_settings_dialog).pack(side="left", padx=6)
+        self.button(secondary, "Change pill name / reminder time", self.open_settings_dialog).pack(side="left", padx=6)
         self.button(secondary, "History", self.open_history_dialog).pack(side="left", padx=6)
         self.button(secondary, "Extra reminder", self.open_extra_reminder_dialog).pack(side="left", padx=6)
 
+        self.latest_history_label = tk.Label(
+            card,
+            text="",
+            bg=PANEL_BG,
+            fg=MUTED_COLOR,
+            font=("Helvetica", 12, "bold"),
+            wraplength=760,
+        )
+        self.latest_history_label.grid(row=7, column=0, sticky="ew", pady=(18, 0))
+
         self.feedback_label = tk.Label(card, text="Ready.", bg=PANEL_BG, fg=MUTED_COLOR, font=("Helvetica", 12, "bold"))
-        self.feedback_label.grid(row=7, column=0, sticky="ew", pady=(22, 0))
+        self.feedback_label.grid(row=8, column=0, sticky="ew", pady=(12, 0))
 
         self.clock_label = tk.Label(home, text="", bg=WINDOW_BG, fg=MUTED_COLOR, font=("Helvetica", 12, "bold"))
         self.clock_label.grid(row=1, column=0, sticky="e", pady=(10, 0))
@@ -356,6 +388,18 @@ class PillReminderApp:
     def get_history(self):
         history = self.data.get("history")
         return history if isinstance(history, list) else []
+
+    def get_daily_reminder_text(self):
+        reminders = self.data.get("daily_reminders", [])
+        clean_reminders = [value for value in reminders if isinstance(value, str) and is_valid_time(value)]
+
+        if not clean_reminders:
+            return "No daily reminder time saved"
+
+        if len(clean_reminders) == 1:
+            return f"Daily reminder time: {clean_reminders[0]}"
+
+        return f"Daily reminder times: {', '.join(clean_reminders)}"
 
     def widget_is_alive(self, widget_name):
         widget = getattr(self, widget_name, None)
@@ -382,7 +426,7 @@ class PillReminderApp:
         window = tk.Toplevel(self.root)
         self.settings_window = window
         window.title("Settings")
-        window.geometry("560x460")
+        window.geometry("620x680")
         window.configure(bg=WINDOW_BG)
         window.transient(self.root)
 
@@ -448,15 +492,47 @@ class PillReminderApp:
         self.daily_hour_var = tk.StringVar(value=default_hour)
         self.daily_minute_var = tk.StringVar(value=default_minute)
 
-        hour_menu = tk.OptionMenu(time_row, self.daily_hour_var, *[f"{hour:02}" for hour in range(24)])
-        hour_menu.config(bg="#ffffff", fg=TEXT_COLOR, relief="raised", bd=2, font=("Menlo", 15, "bold"), width=4)
-        hour_menu.pack(side="left", ipady=5)
+        hour_box = tk.Frame(time_row, bg="#fff4bd")
+        hour_box.pack(side="left", fill="x", expand=True, padx=(0, 14))
+        tk.Label(hour_box, text="Hour", bg="#fff4bd", fg=MUTED_COLOR, font=("Helvetica", 12, "bold")).pack(anchor="w")
+        self.daily_hour_dropdown = ttk.Combobox(
+            hour_box,
+            textvariable=self.daily_hour_var,
+            values=[f"{hour:02}" for hour in range(24)],
+            state="readonly",
+            width=8,
+            justify="center",
+            font=("Menlo", 20, "bold"),
+        )
+        self.daily_hour_dropdown.pack(fill="x", ipady=8, pady=(4, 0))
 
-        tk.Label(time_row, text=":", bg="#fff4bd", fg=TEXT_COLOR, font=("Helvetica", 18, "bold")).pack(side="left", padx=8)
+        minute_box = tk.Frame(time_row, bg="#fff4bd")
+        minute_box.pack(side="left", fill="x", expand=True)
+        tk.Label(minute_box, text="Minute", bg="#fff4bd", fg=MUTED_COLOR, font=("Helvetica", 12, "bold")).pack(anchor="w")
+        self.daily_minute_dropdown = ttk.Combobox(
+            minute_box,
+            textvariable=self.daily_minute_var,
+            values=[f"{minute:02}" for minute in range(60)],
+            state="readonly",
+            width=8,
+            justify="center",
+            font=("Menlo", 20, "bold"),
+        )
+        self.daily_minute_dropdown.pack(fill="x", ipady=8, pady=(4, 0))
 
-        minute_menu = tk.OptionMenu(time_row, self.daily_minute_var, *[f"{minute:02}" for minute in range(60)])
-        minute_menu.config(bg="#ffffff", fg=TEXT_COLOR, relief="raised", bd=2, font=("Menlo", 15, "bold"), width=4)
-        minute_menu.pack(side="left", ipady=5)
+        self.daily_hour_dropdown.bind("<<ComboboxSelected>>", self.update_settings_time_preview)
+        self.daily_minute_dropdown.bind("<<ComboboxSelected>>", self.update_settings_time_preview)
+        self.set_daily_time_selection(default_hour, default_minute)
+
+        self.settings_time_preview_label = tk.Label(
+            selector_box,
+            text="",
+            bg="#fff4bd",
+            fg=TEXT_COLOR,
+            font=("Helvetica", 14, "bold"),
+        )
+        self.settings_time_preview_label.pack(anchor="w", pady=(12, 0))
+        self.update_settings_time_preview()
 
         self.button(selector_box, "Save pill name and reminder time", self.save_settings, primary=True).pack(
             anchor="w", pady=(18, 0)
@@ -489,6 +565,17 @@ class PillReminderApp:
         self.pill_name_entry.delete(0, tk.END)
         self.pill_name_entry.insert(0, pill_name)
 
+    def update_settings_time_preview(self, _event=None):
+        if not self.widget_is_alive("settings_time_preview_label"):
+            return
+
+        reminder_time = self.get_selected_daily_time(show_error=False)
+
+        if reminder_time:
+            self.settings_time_preview_label.config(text=f"Reminder will show every day at {reminder_time}.")
+        else:
+            self.settings_time_preview_label.config(text="Choose an hour and minute for the reminder.")
+
     def load_selected_pill_name(self, _event=None):
         if not self.widget_is_alive("pill_name_listbox"):
             return
@@ -516,32 +603,37 @@ class PillReminderApp:
                 return
 
     def set_daily_time_selection(self, hour, minute):
-        if not self.widget_is_alive("daily_hour_listbox") or not self.widget_is_alive("daily_minute_listbox"):
-            return
-
         hour_index = int(hour)
         minute_index = int(minute)
+        self.daily_hour_var.set(f"{hour_index:02}")
+        self.daily_minute_var.set(f"{minute_index:02}")
 
-        self.daily_hour_listbox.selection_clear(0, tk.END)
-        self.daily_hour_listbox.selection_set(hour_index)
-        self.daily_hour_listbox.see(hour_index)
-
-        self.daily_minute_listbox.selection_clear(0, tk.END)
-        self.daily_minute_listbox.selection_set(minute_index)
-        self.daily_minute_listbox.see(minute_index)
-
-    def get_selected_daily_time(self):
+    def get_selected_daily_time(self, show_error=True):
         if not hasattr(self, "daily_hour_var") or not hasattr(self, "daily_minute_var"):
             return None
 
-        selected_hour = self.daily_hour_var.get()
-        selected_minute = self.daily_minute_var.get()
+        selected_hour = self.daily_hour_var.get().strip()
+        selected_minute = self.daily_minute_var.get().strip()
 
         if not selected_hour or not selected_minute:
-            messagebox.showinfo("Choose a time", "Choose both an hour and a minute.")
+            if show_error:
+                messagebox.showinfo("Choose a time", "Choose both an hour and a minute.")
             return None
 
-        return f"{selected_hour}:{selected_minute}"
+        try:
+            hour = int(selected_hour)
+            minute = int(selected_minute)
+        except ValueError:
+            if show_error:
+                messagebox.showerror("Invalid time", "Hour and minute must be numbers.")
+            return None
+
+        if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+            if show_error:
+                messagebox.showerror("Invalid time", "Choose an hour from 00-23 and a minute from 00-59.")
+            return None
+
+        return f"{hour:02}:{minute:02}"
 
     def open_extra_reminder_dialog(self):
         window, body = self.dialog("Extra reminder", 560, 310)
@@ -572,12 +664,22 @@ class PillReminderApp:
             row=0, column=0, columnspan=3, sticky="w", pady=(0, 14)
         )
         body.rowconfigure(1, weight=1)
+        body.columnconfigure(0, weight=1)
 
-        self.history_listbox = tk.Listbox(body, font=("Menlo", 12), exportselection=False)
-        self.history_listbox.grid(row=1, column=0, columnspan=3, sticky="nsew")
-        scrollbar = tk.Scrollbar(body, command=self.history_listbox.yview)
+        self.history_text = tk.Text(
+            body,
+            bg="#ffffff",
+            fg=TEXT_COLOR,
+            relief="solid",
+            bd=2,
+            font=("Menlo", 13),
+            height=12,
+            wrap="word",
+        )
+        self.history_text.grid(row=1, column=0, columnspan=3, sticky="nsew")
+        scrollbar = tk.Scrollbar(body, command=self.history_text.yview)
         scrollbar.grid(row=1, column=3, sticky="ns")
-        self.history_listbox.configure(yscrollcommand=scrollbar.set)
+        self.history_text.configure(yscrollcommand=scrollbar.set)
 
         self.button(body, "Undo last taken", self.undo_last_taken, 2, 0, pady=(12, 0), padx=(0, 8))
         self.button(body, "Clear history", self.clear_history, 2, 1, danger=True, pady=(12, 0), padx=(0, 8))
@@ -616,9 +718,12 @@ class PillReminderApp:
         self.data["pill_name"] = pill_name
         self.data["daily_reminders"] = [reminder_time]
         self.data["reminder_time"] = reminder_time
+        self.daily_hour_var.set(reminder_time.split(":")[0])
+        self.daily_minute_var.set(reminder_time.split(":")[1])
         self.save_data()
         self.refresh_all()
         self.set_feedback(f"Saved {pill_name} reminder for {reminder_time}.")
+        self.update_settings_time_preview()
         if self.widget_is_alive("settings_feedback_label"):
             self.settings_feedback_label.config(text=f"Saved {pill_name} at {reminder_time}.")
 
@@ -765,8 +870,18 @@ class PillReminderApp:
         if upcoming:
             due = upcoming[0]["due"]
             self.next_label.config(text=f"{due:%I:%M %p}".lstrip("0"))
+            self.next_detail_label.config(text=friendly_due_text(due))
         else:
             self.next_label.config(text="None")
+            self.next_detail_label.config(text="No reminder time set")
+
+        self.current_reminder_label.config(text=self.get_daily_reminder_text())
+
+        history = self.get_history()
+        if history:
+            self.latest_history_label.config(text=f"Last taken: {history[-1]}")
+        else:
+            self.latest_history_label.config(text="No history yet.")
 
     def refresh_daily_list(self):
         if not self.widget_is_alive("daily_listbox"):
@@ -790,18 +905,22 @@ class PillReminderApp:
             )
 
     def refresh_history_list(self):
-        if not self.widget_is_alive("history_listbox"):
+        if not self.widget_is_alive("history_text"):
             return
 
-        self.history_listbox.delete(0, tk.END)
+        self.history_text.config(state="normal")
+        self.history_text.delete("1.0", tk.END)
         history = self.get_history()
 
         if not history:
-            self.history_listbox.insert(tk.END, "No pills marked taken yet.")
+            self.history_text.insert(tk.END, "No pills marked taken yet.")
+            self.history_text.config(state="disabled")
             return
 
         for entry in reversed(history):
-            self.history_listbox.insert(tk.END, entry)
+            self.history_text.insert(tk.END, f"{entry}\n")
+
+        self.history_text.config(state="disabled")
 
     def mark_taken(self, item=None):
         now = datetime.now()
@@ -927,14 +1046,19 @@ class PillReminderApp:
 
         safe_message = message.replace('"', '\\"')
         safe_title = APP_NAME.replace('"', '\\"')
-        subprocess.run(["osascript", "-e", f'display notification "{safe_message}" with title "{safe_title}"'], check=False)
+        script = f'display notification "{safe_message}" with title "{safe_title}" sound name "Glass"'
+        subprocess.run(["osascript", "-e", script], check=False)
 
     def show_reminder_popup(self, label="Reminder", item=None):
         if self.active_popup and self.active_popup.winfo_exists():
             self.active_popup.lift()
+            self.active_popup.focus_force()
             return False
 
         self.send_notification(f"Time to take {self.get_pill_name()}.")
+        self.root.deiconify()
+        self.root.lift()
+        self.root.bell()
 
         popup = tk.Toplevel(self.root)
         self.active_popup = popup
@@ -942,6 +1066,8 @@ class PillReminderApp:
         popup.geometry("420x220")
         popup.configure(bg=WINDOW_BG)
         popup.resizable(False, False)
+        popup.attributes("-topmost", True)
+        popup.after(1500, lambda: popup.attributes("-topmost", False) if popup.winfo_exists() else None)
 
         def close_popup():
             self.active_popup = None
@@ -997,21 +1123,21 @@ class PillReminderApp:
     def check_reminders(self):
         now = datetime.now()
 
+        for snooze in self.get_snoozes():
+            if snooze <= now:
+                item = {"due": snooze, "kind": "Snoozed", "id": format_datetime(snooze)}
+                self.show_reminder_popup(f"Snoozed reminder at {snooze:%H:%M}", item)
+                self.root.after(CHECK_INTERVAL_MS, self.check_reminders)
+                return
+
+        for reminder in self.get_one_time_reminders():
+            if reminder <= now:
+                item = {"due": reminder, "kind": "One-Time", "id": format_datetime(reminder)}
+                self.show_reminder_popup(f"One-time reminder at {reminder:%H:%M}", item)
+                self.root.after(CHECK_INTERVAL_MS, self.check_reminders)
+                return
+
         if self.data.get("last_taken") != now.date().isoformat():
-            for snooze in self.get_snoozes():
-                if snooze <= now:
-                    item = {"due": snooze, "kind": "Snoozed", "id": format_datetime(snooze)}
-                    self.show_reminder_popup(f"Snoozed reminder at {snooze:%H:%M}", item)
-                    self.root.after(CHECK_INTERVAL_MS, self.check_reminders)
-                    return
-
-            for reminder in self.get_one_time_reminders():
-                if reminder <= now:
-                    item = {"due": reminder, "kind": "One-Time", "id": format_datetime(reminder)}
-                    self.show_reminder_popup(f"One-time reminder at {reminder:%H:%M}", item)
-                    self.root.after(CHECK_INTERVAL_MS, self.check_reminders)
-                    return
-
             current_minutes = now.hour * 60 + now.minute
 
             for reminder in self.data["daily_reminders"]:
