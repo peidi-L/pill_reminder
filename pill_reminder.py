@@ -3,7 +3,7 @@ import subprocess
 import tkinter as tk
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 
 
 APP_NAME = "Pill Reminder"
@@ -17,6 +17,17 @@ DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 CHECK_INTERVAL_MS = 15000
 SNOOZE_MINUTES = 10
 HISTORY_LIMIT = 90
+
+WINDOW_BG = "#f5f7fb"
+CARD_BG = "#ffffff"
+TEXT_COLOR = "#1f2933"
+MUTED_COLOR = "#5f6b7a"
+BUTTON_BG = "#e9f0ff"
+BUTTON_ACTIVE_BG = "#d8e5ff"
+DANGER_BG = "#fff0f0"
+TAKEN_BG = "#e8f7ef"
+OPEN_BG = "#f3f5f8"
+OVERDUE_BG = "#fff4df"
 
 
 def is_valid_time(value):
@@ -34,6 +45,55 @@ def parse_datetime(value):
 
 def format_datetime(value):
     return value.strftime(DATETIME_FORMAT)
+
+
+def parse_history_date(entry):
+    if not isinstance(entry, str):
+        return None
+
+    try:
+        return datetime.strptime(entry[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def short_date_label(day):
+    return day.strftime("%b %d").replace(" 0", " ")
+
+
+def relative_due_text(due):
+    now = datetime.now()
+    seconds = int((due - now).total_seconds())
+
+    if seconds <= -60:
+        minutes = abs(seconds) // 60
+        hours = minutes // 60
+        remaining_minutes = minutes % 60
+
+        if hours >= 24:
+            days = hours // 24
+            return f"{days} day{'s' if days != 1 else ''} overdue"
+
+        if hours:
+            return f"{hours}h {remaining_minutes}m overdue"
+
+        return f"{minutes} min overdue"
+
+    if seconds <= 60:
+        return "due now"
+
+    minutes = seconds // 60
+    hours = minutes // 60
+    remaining_minutes = minutes % 60
+
+    if hours >= 24:
+        days = hours // 24
+        return f"in {days} day{'s' if days != 1 else ''}"
+
+    if hours:
+        return f"in {hours}h {remaining_minutes}m"
+
+    return f"in {minutes}m"
 
 
 def time_to_minutes(value):
@@ -99,6 +159,7 @@ def prepare_data(raw_data):
         "last_taken": data.get("last_taken") if isinstance(data.get("last_taken"), str) else None,
         "last_taken_time": data.get("last_taken_time") if isinstance(data.get("last_taken_time"), str) else None,
         "reminders_shown": data.get("reminders_shown", []) if isinstance(data.get("reminders_shown"), list) else [],
+        "pill_name": data.get("pill_name") if isinstance(data.get("pill_name"), str) else "Birth Control Pill",
     }
 
 
@@ -109,8 +170,8 @@ class PillReminderApp:
         self.upcoming_items = []
 
         self.root.title(APP_NAME)
-        self.root.geometry("900x760")
-        self.root.minsize(840, 680)
+        self.root.geometry("1040x820")
+        self.root.minsize(940, 760)
 
         self.configure_style()
         self.build_ui()
@@ -119,167 +180,306 @@ class PillReminderApp:
         self.check_reminders()
 
     def configure_style(self):
-        style = ttk.Style()
+        self.root.configure(bg=WINDOW_BG)
 
-        if "aqua" in style.theme_names():
-            style.theme_use("aqua")
+    def card(self, parent, title):
+        frame = tk.LabelFrame(
+            parent,
+            text=title,
+            bg=CARD_BG,
+            fg=TEXT_COLOR,
+            font=("Helvetica", 13, "bold"),
+            bd=1,
+            relief="solid",
+            padx=14,
+            pady=12,
+        )
+        return frame
 
-        style.configure("Title.TLabel", font=("Helvetica", 22, "bold"))
-        style.configure("Status.TLabel", font=("Helvetica", 14, "bold"))
-        style.configure("Muted.TLabel", foreground="#555555")
-
-    def build_ui(self):
-        main = ttk.Frame(self.root, padding=16)
-        main.pack(fill="both", expand=True)
-
-        ttk.Label(main, text=APP_NAME, style="Title.TLabel").pack(anchor="w")
-        ttk.Label(main, text="Daily pill reminders, one-time reminders, snooze, and history.", style="Muted.TLabel").pack(
-            anchor="w",
-            pady=(2, 12),
+    def button(self, parent, text, command, danger=False):
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=DANGER_BG if danger else BUTTON_BG,
+            activebackground=BUTTON_ACTIVE_BG,
+            fg=TEXT_COLOR,
+            bd=1,
+            relief="raised",
+            padx=12,
+            pady=6,
+            cursor="hand2",
         )
 
-        body = ttk.Frame(main)
+    def label(self, parent, text="", font=None, muted=False):
+        return tk.Label(
+            parent,
+            text=text,
+            bg=CARD_BG,
+            fg=MUTED_COLOR if muted else TEXT_COLOR,
+            font=font or ("Helvetica", 12),
+            anchor="w",
+            justify="left",
+        )
+
+    def build_ui(self):
+        main = tk.Frame(self.root, bg=WINDOW_BG, padx=18, pady=18)
+        main.pack(fill="both", expand=True)
+
+        tk.Label(
+            main,
+            text=APP_NAME,
+            bg=WINDOW_BG,
+            fg=TEXT_COLOR,
+            font=("Helvetica", 24, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            main,
+            text="Daily pill reminders, one-time reminders, snooze, and taken history.",
+            bg=WINDOW_BG,
+            fg=MUTED_COLOR,
+            font=("Helvetica", 12),
+        ).pack(
+            anchor="w",
+            pady=(2, 14),
+        )
+
+        body = tk.Frame(main, bg=WINDOW_BG)
         body.pack(fill="both", expand=True)
         body.columnconfigure(0, weight=1)
         body.columnconfigure(1, weight=1)
         body.rowconfigure(1, weight=1)
+        body.rowconfigure(2, weight=1)
+        body.rowconfigure(3, weight=1)
 
-        today_frame = ttk.LabelFrame(body, text="Today", padding=12)
+        today_frame = self.card(body, "Today")
         today_frame.grid(row=0, column=0, sticky="ew", padx=(0, 8), pady=(0, 12))
 
-        self.status_label = ttk.Label(today_frame, text="", style="Status.TLabel")
+        pill_row = tk.Frame(today_frame, bg=CARD_BG)
+        pill_row.pack(fill="x", pady=(0, 10))
+
+        self.label(pill_row, "Pill").pack(side="left", padx=(0, 8))
+        self.pill_name_entry = tk.Entry(pill_row, width=28, relief="solid", bd=1)
+        self.pill_name_entry.insert(0, self.get_pill_name())
+        self.pill_name_entry.pack(side="left")
+        self.button(pill_row, "Save Name", self.save_settings).pack(side="left", padx=(10, 0))
+
+        self.status_label = self.label(today_frame, font=("Helvetica", 15, "bold"))
         self.status_label.pack(anchor="w")
 
-        self.next_label = ttk.Label(today_frame, text="")
+        self.next_label = self.label(today_frame)
         self.next_label.pack(anchor="w", pady=(6, 0))
 
-        today_actions = ttk.Frame(today_frame)
+        self.streak_label = self.label(today_frame)
+        self.streak_label.pack(anchor="w", pady=(6, 0))
+
+        today_actions = tk.Frame(today_frame, bg=CARD_BG)
         today_actions.pack(anchor="w", pady=(12, 0))
 
-        ttk.Button(today_actions, text="Taken Today", command=self.mark_taken).pack(side="left", padx=(0, 8))
-        ttk.Button(today_actions, text="Reset Today", command=self.reset_today).pack(side="left", padx=(0, 8))
-        ttk.Button(today_actions, text="Test Reminder", command=self.show_test_reminder).pack(side="left")
+        self.button(today_actions, "Taken Now", self.mark_taken).pack(side="left", padx=(0, 8))
+        self.button(today_actions, "Reset Today", self.reset_today).pack(side="left", padx=(0, 8))
+        self.button(today_actions, "Test Reminder", self.show_test_reminder).pack(side="left")
 
-        daily_frame = ttk.LabelFrame(body, text="Daily Reminders", padding=12)
-        daily_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8), pady=(0, 12))
+        progress_frame = self.card(body, "Last 14 Days")
+        progress_frame.grid(row=1, column=0, sticky="ew", padx=(0, 8), pady=(0, 12))
 
-        daily_input = ttk.Frame(daily_frame)
+        self.day_grid = tk.Frame(progress_frame, bg=CARD_BG)
+        self.day_grid.pack(fill="x")
+        self.day_labels = []
+
+        for column in range(7):
+            self.day_grid.columnconfigure(column, weight=1)
+
+        for index in range(14):
+            day_label = tk.Label(
+                self.day_grid,
+                text="",
+                bg=OPEN_BG,
+                fg=TEXT_COLOR,
+                font=("Helvetica", 10),
+                relief="solid",
+                bd=1,
+                padx=4,
+                pady=6,
+            )
+            day_label.grid(row=index // 7, column=index % 7, sticky="ew", padx=2, pady=2)
+            self.day_labels.append(day_label)
+
+        daily_frame = self.card(body, "Daily Reminders")
+        daily_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 8), pady=(0, 12))
+
+        daily_input = tk.Frame(daily_frame, bg=CARD_BG)
         daily_input.pack(anchor="w")
 
-        ttk.Label(daily_input, text="Time").pack(side="left", padx=(0, 8))
+        self.label(daily_input, "Time").pack(side="left", padx=(0, 8))
         default_hour, default_minute = self.data["daily_reminders"][0].split(":")
 
-        self.daily_hour = tk.Spinbox(daily_input, from_=0, to=23, width=3, format="%02.0f")
+        self.daily_hour = tk.Spinbox(daily_input, from_=0, to=23, width=3, format="%02.0f", justify="center")
         self.daily_hour.delete(0, tk.END)
         self.daily_hour.insert(0, default_hour)
         self.daily_hour.pack(side="left")
 
-        ttk.Label(daily_input, text=":").pack(side="left", padx=4)
+        self.label(daily_input, ":").pack(side="left", padx=4)
 
-        self.daily_minute = tk.Spinbox(daily_input, from_=0, to=59, width=3, format="%02.0f")
+        self.daily_minute = tk.Spinbox(daily_input, from_=0, to=59, width=3, format="%02.0f", justify="center")
         self.daily_minute.delete(0, tk.END)
         self.daily_minute.insert(0, default_minute)
         self.daily_minute.pack(side="left")
 
-        ttk.Button(daily_input, text="Add Daily", command=self.add_daily_reminder).pack(side="left", padx=(12, 0))
+        self.button(daily_input, "Add Daily", self.add_daily_reminder).pack(side="left", padx=(12, 0))
+        self.button(daily_input, "Update Selected", self.update_selected_daily).pack(side="left", padx=(8, 0))
 
-        daily_list_frame = ttk.Frame(daily_frame)
+        daily_list_frame = tk.Frame(daily_frame, bg=CARD_BG)
         daily_list_frame.pack(anchor="w", fill="x", pady=(12, 0))
 
-        self.daily_listbox = tk.Listbox(daily_list_frame, height=5, width=20, exportselection=False)
+        self.daily_listbox = tk.Listbox(
+            daily_list_frame,
+            height=5,
+            width=20,
+            exportselection=False,
+            bg="#fbfdff",
+            fg=TEXT_COLOR,
+            selectbackground="#cfe0ff",
+            relief="solid",
+            bd=1,
+        )
         self.daily_listbox.pack(side="left", fill="x", expand=True)
+        self.daily_listbox.bind("<<ListboxSelect>>", self.load_selected_daily)
 
-        daily_scrollbar = ttk.Scrollbar(daily_list_frame, orient="vertical", command=self.daily_listbox.yview)
+        daily_scrollbar = tk.Scrollbar(daily_list_frame, orient="vertical", command=self.daily_listbox.yview)
         daily_scrollbar.pack(side="left", fill="y")
         self.daily_listbox.configure(yscrollcommand=daily_scrollbar.set)
 
-        ttk.Button(daily_frame, text="Remove Selected Daily", command=self.remove_selected_daily).pack(
+        self.button(daily_frame, "Remove Selected Daily", self.remove_selected_daily, danger=True).pack(
             anchor="w",
             pady=(10, 0),
         )
 
-        one_time_frame = ttk.LabelFrame(body, text="One-Time Reminder", padding=12)
-        one_time_frame.grid(row=2, column=0, sticky="ew", padx=(0, 8))
+        one_time_frame = self.card(body, "One-Time Reminder")
+        one_time_frame.grid(row=3, column=0, sticky="ew", padx=(0, 8))
 
-        one_time_input = ttk.Frame(one_time_frame)
+        one_time_input = tk.Frame(one_time_frame, bg=CARD_BG)
         one_time_input.pack(anchor="w")
 
         default_one_time = datetime.now() + timedelta(hours=1)
-        ttk.Label(one_time_input, text="Date").pack(side="left", padx=(0, 8))
+        self.label(one_time_input, "Date").pack(side="left", padx=(0, 8))
 
-        self.one_time_date = ttk.Entry(one_time_input, width=12)
+        self.one_time_date = tk.Entry(one_time_input, width=12, relief="solid", bd=1)
         self.one_time_date.insert(0, default_one_time.strftime("%Y-%m-%d"))
         self.one_time_date.pack(side="left")
 
-        ttk.Label(one_time_input, text="Time").pack(side="left", padx=(12, 8))
+        self.label(one_time_input, "Time").pack(side="left", padx=(12, 8))
 
-        self.one_time_hour = tk.Spinbox(one_time_input, from_=0, to=23, width=3, format="%02.0f")
+        self.one_time_hour = tk.Spinbox(one_time_input, from_=0, to=23, width=3, format="%02.0f", justify="center")
         self.one_time_hour.delete(0, tk.END)
         self.one_time_hour.insert(0, default_one_time.strftime("%H"))
         self.one_time_hour.pack(side="left")
 
-        ttk.Label(one_time_input, text=":").pack(side="left", padx=4)
+        self.label(one_time_input, ":").pack(side="left", padx=4)
 
-        self.one_time_minute = tk.Spinbox(one_time_input, from_=0, to=59, width=3, format="%02.0f")
+        self.one_time_minute = tk.Spinbox(one_time_input, from_=0, to=59, width=3, format="%02.0f", justify="center")
         self.one_time_minute.delete(0, tk.END)
         self.one_time_minute.insert(0, default_one_time.strftime("%M"))
         self.one_time_minute.pack(side="left")
 
-        ttk.Button(one_time_input, text="Add One-Time", command=self.add_one_time_reminder).pack(side="left", padx=(12, 0))
-        ttk.Label(one_time_frame, text="Date format: YYYY-MM-DD", style="Muted.TLabel").pack(anchor="w", pady=(8, 0))
+        self.button(one_time_input, "Add One-Time", self.add_one_time_reminder).pack(side="left", padx=(12, 0))
+        self.label(one_time_frame, "Date format: YYYY-MM-DD", muted=True).pack(anchor="w", pady=(8, 0))
 
-        upcoming_frame = ttk.LabelFrame(body, text="Upcoming Reminders", padding=12)
-        upcoming_frame.grid(row=0, column=1, rowspan=2, sticky="nsew", padx=(8, 0), pady=(0, 12))
+        upcoming_frame = self.card(body, "Upcoming Reminders")
+        upcoming_frame.grid(row=0, column=1, rowspan=3, sticky="nsew", padx=(8, 0), pady=(0, 12))
         upcoming_frame.rowconfigure(0, weight=1)
         upcoming_frame.columnconfigure(0, weight=1)
 
-        self.upcoming_tree = ttk.Treeview(upcoming_frame, columns=("when", "kind"), show="headings", height=13)
-        self.upcoming_tree.heading("when", text="When")
-        self.upcoming_tree.heading("kind", text="Type")
-        self.upcoming_tree.column("when", width=210, anchor="w")
-        self.upcoming_tree.column("kind", width=150, anchor="w")
-        self.upcoming_tree.grid(row=0, column=0, sticky="nsew")
+        self.upcoming_listbox = tk.Listbox(
+            upcoming_frame,
+            height=15,
+            exportselection=False,
+            bg="#fbfdff",
+            fg=TEXT_COLOR,
+            selectbackground="#cfe0ff",
+            relief="solid",
+            bd=1,
+            font=("Menlo", 12),
+        )
+        self.upcoming_listbox.grid(row=0, column=0, sticky="nsew")
 
-        upcoming_scrollbar = ttk.Scrollbar(upcoming_frame, orient="vertical", command=self.upcoming_tree.yview)
+        upcoming_scrollbar = tk.Scrollbar(upcoming_frame, orient="vertical", command=self.upcoming_listbox.yview)
         upcoming_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.upcoming_tree.configure(yscrollcommand=upcoming_scrollbar.set)
+        self.upcoming_listbox.configure(yscrollcommand=upcoming_scrollbar.set)
 
-        upcoming_actions = ttk.Frame(upcoming_frame)
+        upcoming_actions = tk.Frame(upcoming_frame, bg=CARD_BG)
         upcoming_actions.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
-        ttk.Button(upcoming_actions, text="Remove Selected", command=self.remove_selected_upcoming).pack(
+        self.button(upcoming_actions, "Mark Taken", self.mark_selected_upcoming_taken).pack(
             side="left",
             padx=(0, 8),
         )
-        ttk.Button(upcoming_actions, text="Refresh", command=self.refresh_all).pack(side="left")
+        self.button(upcoming_actions, "Remove Selected", self.remove_selected_upcoming, danger=True).pack(
+            side="left",
+            padx=(0, 8),
+        )
+        self.button(upcoming_actions, "Refresh", self.refresh_all).pack(side="left")
 
-        history_frame = ttk.LabelFrame(body, text="Taken History", padding=12)
-        history_frame.grid(row=2, column=1, sticky="nsew", padx=(8, 0))
+        history_frame = self.card(body, "Taken History")
+        history_frame.grid(row=3, column=1, sticky="nsew", padx=(8, 0))
         history_frame.rowconfigure(0, weight=1)
         history_frame.columnconfigure(0, weight=1)
 
-        self.history_listbox = tk.Listbox(history_frame, height=8, width=42, exportselection=False)
+        self.history_listbox = tk.Listbox(
+            history_frame,
+            height=8,
+            width=42,
+            exportselection=False,
+            bg="#fbfdff",
+            fg=TEXT_COLOR,
+            selectbackground="#cfe0ff",
+            relief="solid",
+            bd=1,
+        )
         self.history_listbox.grid(row=0, column=0, sticky="nsew")
 
-        history_scrollbar = ttk.Scrollbar(history_frame, orient="vertical", command=self.history_listbox.yview)
+        history_scrollbar = tk.Scrollbar(history_frame, orient="vertical", command=self.history_listbox.yview)
         history_scrollbar.grid(row=0, column=1, sticky="ns")
         self.history_listbox.configure(yscrollcommand=history_scrollbar.set)
 
-        history_actions = ttk.Frame(history_frame)
+        history_actions = tk.Frame(history_frame, bg=CARD_BG)
         history_actions.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
-        ttk.Button(history_actions, text="Clear History", command=self.clear_history).pack(side="left")
+        self.button(history_actions, "Undo Last Taken", self.undo_last_taken).pack(side="left", padx=(0, 8))
+        self.button(history_actions, "Clear History", self.clear_history, danger=True).pack(side="left")
 
-        footer = ttk.Frame(main)
+        footer = tk.Frame(main, bg=WINDOW_BG)
         footer.pack(fill="x", pady=(12, 0))
 
-        ttk.Label(footer, text="Keep this app open so reminders can appear.", style="Muted.TLabel").pack(side="left")
-        ttk.Button(footer, text="Open Data Folder", command=self.open_data_folder).pack(side="right", padx=(8, 0))
-        ttk.Button(footer, text="Save Now", command=self.save_data).pack(side="right")
+        tk.Label(
+            footer,
+            text="Keep this app open so reminders can appear.",
+            bg=WINDOW_BG,
+            fg=MUTED_COLOR,
+            font=("Helvetica", 11),
+        ).pack(side="left")
+        self.button(footer, "Open Data Folder", self.open_data_folder).pack(side="right", padx=(8, 0))
+        self.button(footer, "Save Now", self.save_data).pack(side="right")
 
     def save_data(self):
         APP_DIR.mkdir(parents=True, exist_ok=True)
         DATA_FILE.write_text(json.dumps(self.data, indent=2))
+
+    def get_pill_name(self):
+        pill_name = self.data.get("pill_name")
+        return pill_name.strip() if isinstance(pill_name, str) and pill_name.strip() else "Birth Control Pill"
+
+    def save_settings(self):
+        pill_name = self.pill_name_entry.get().strip()
+
+        if not pill_name:
+            messagebox.showerror("Missing Name", "Enter a pill name.")
+            return
+
+        self.data["pill_name"] = pill_name
+        self.save_data()
+        self.refresh_all()
+        messagebox.showinfo("Saved", "Pill name saved.")
 
     def get_snoozes(self):
         return valid_datetime_list(self.data.get("snoozes"))
@@ -298,6 +498,27 @@ class PillReminderApp:
     def get_history(self):
         history = self.data.get("history")
         return history if isinstance(history, list) else []
+
+    def get_taken_dates(self):
+        return {taken_date for taken_date in (parse_history_date(entry) for entry in self.get_history()) if taken_date}
+
+    def get_current_streak(self):
+        taken_dates = self.get_taken_dates()
+        streak = 0
+        cursor = date.today()
+
+        while cursor in taken_dates:
+            streak += 1
+            cursor -= timedelta(days=1)
+
+        return streak
+
+    def get_latest_history_entry(self):
+        for entry in reversed(self.get_history()):
+            if parse_history_date(entry):
+                return entry
+
+        return None
 
     def get_upcoming_items(self):
         now = datetime.now()
@@ -318,11 +539,6 @@ class PillReminderApp:
 
             if self.data.get("last_taken") == today.isoformat():
                 due += timedelta(days=1)
-            elif due <= now:
-                reminder_key = f"{today.isoformat()}:{reminder}"
-
-                if reminder_key in self.data.get("reminders_shown", []):
-                    due += timedelta(days=1)
 
             items.append({"due": due, "kind": "Daily", "id": reminder})
 
@@ -330,19 +546,21 @@ class PillReminderApp:
 
     def refresh_all(self):
         self.refresh_status()
+        self.refresh_progress()
         self.refresh_daily_list()
         self.refresh_upcoming_list()
         self.refresh_history_list()
 
     def refresh_status(self):
         today = date.today().isoformat()
+        pill_name = self.get_pill_name()
 
         if self.data.get("last_taken") == today:
-            status_text = f"Taken today at {self.data.get('last_taken_time', 'unknown time')}"
+            status_text = f"{pill_name}: taken today at {self.data.get('last_taken_time', 'unknown time')}"
         elif self.data.get("last_taken_time"):
-            status_text = f"Last taken: {self.data['last_taken_time']}"
+            status_text = f"{pill_name}: last taken {self.data['last_taken_time']}"
         else:
-            status_text = "Not marked taken today"
+            status_text = f"{pill_name}: not marked taken today"
 
         self.status_label.config(text=status_text)
 
@@ -355,21 +573,63 @@ class PillReminderApp:
         else:
             self.next_label.config(text="Next reminder: none")
 
+        streak = self.get_current_streak()
+        day_word = "day" if streak == 1 else "days"
+        self.streak_label.config(text=f"Current streak: {streak} {day_word}")
+
+    def refresh_progress(self):
+        taken_dates = self.get_taken_dates()
+        start_day = date.today() - timedelta(days=13)
+
+        for index, day_label in enumerate(self.day_labels):
+            day = start_day + timedelta(days=index)
+            was_taken = day in taken_dates
+
+            if was_taken:
+                status = "Taken"
+                background = TAKEN_BG
+            elif day < date.today():
+                status = "No Log"
+                background = OPEN_BG
+            else:
+                status = "Open"
+                background = OPEN_BG
+
+            day_label.config(
+                text=f"{short_date_label(day)}\n{status}",
+                bg=background,
+            )
+
     def refresh_daily_list(self):
         self.daily_listbox.delete(0, tk.END)
 
         for reminder in self.data["daily_reminders"]:
             self.daily_listbox.insert(tk.END, reminder)
 
+    def load_selected_daily(self, _event=None):
+        selected_indexes = self.daily_listbox.curselection()
+
+        if not selected_indexes:
+            return
+
+        selected_time = self.daily_listbox.get(selected_indexes[0])
+        hour, minute = selected_time.split(":")
+        self.daily_hour.delete(0, tk.END)
+        self.daily_hour.insert(0, hour)
+        self.daily_minute.delete(0, tk.END)
+        self.daily_minute.insert(0, minute)
+
     def refresh_upcoming_list(self):
         self.upcoming_items = self.get_upcoming_items()
+        self.upcoming_listbox.delete(0, tk.END)
 
-        for item_id in self.upcoming_tree.get_children():
-            self.upcoming_tree.delete(item_id)
+        for item in self.upcoming_items[:20]:
+            due_text = item["due"].strftime("%a %b %d %H:%M")
+            relative_text = relative_due_text(item["due"])
+            self.upcoming_listbox.insert(tk.END, f"{due_text:<18} {item['kind']:<9} {relative_text}")
 
-        for index, item in enumerate(self.upcoming_items[:20]):
-            due_text = item["due"].strftime("%Y-%m-%d %H:%M")
-            self.upcoming_tree.insert("", tk.END, iid=str(index), values=(due_text, item["kind"]))
+            if item["due"] <= datetime.now():
+                self.upcoming_listbox.itemconfig(self.upcoming_listbox.size() - 1, bg=OVERDUE_BG)
 
     def refresh_history_list(self):
         self.history_listbox.delete(0, tk.END)
@@ -399,6 +659,32 @@ class PillReminderApp:
         self.save_data()
         self.refresh_all()
         messagebox.showinfo("Added", f"Daily reminder added for {reminder_time}.")
+
+    def update_selected_daily(self):
+        selected_indexes = self.daily_listbox.curselection()
+
+        if not selected_indexes:
+            messagebox.showinfo("No Reminder Selected", "Select a daily reminder to update.")
+            return
+
+        old_time = self.daily_listbox.get(selected_indexes[0])
+        new_time = normalize_time(self.daily_hour.get(), self.daily_minute.get())
+
+        if not is_valid_time(new_time):
+            messagebox.showerror("Invalid Time", "Choose a valid 24-hour time.")
+            return
+
+        if new_time != old_time and new_time in self.data["daily_reminders"]:
+            messagebox.showinfo("Already Added", f"{new_time} is already in your daily reminders.")
+            return
+
+        self.data["daily_reminders"] = sorted(
+            new_time if reminder == old_time else reminder for reminder in self.data["daily_reminders"]
+        )
+        self.data["reminder_time"] = new_time
+        self.save_data()
+        self.refresh_all()
+        messagebox.showinfo("Updated", f"Daily reminder changed to {new_time}.")
 
     def remove_selected_daily(self):
         selected_indexes = self.daily_listbox.curselection()
@@ -443,13 +729,13 @@ class PillReminderApp:
         messagebox.showinfo("Added", f"One-time reminder added for {reminder_datetime:%Y-%m-%d at %H:%M}.")
 
     def remove_selected_upcoming(self):
-        selected = self.upcoming_tree.selection()
+        selected = self.upcoming_listbox.curselection()
 
         if not selected:
             messagebox.showinfo("No Reminder Selected", "Select an upcoming reminder to remove.")
             return
 
-        item = self.upcoming_items[int(selected[0])]
+        item = self.upcoming_items[selected[0]]
 
         if item["kind"] == "Daily":
             if len(self.data["daily_reminders"]) == 1:
@@ -468,6 +754,24 @@ class PillReminderApp:
         self.save_data()
         self.refresh_all()
 
+    def mark_selected_upcoming_taken(self):
+        selected = self.upcoming_listbox.curselection()
+
+        if not selected:
+            messagebox.showinfo("No Reminder Selected", "Select an upcoming reminder to mark taken.")
+            return
+
+        item = self.upcoming_items[selected[0]]
+
+        if item["kind"] == "One-Time":
+            self.save_one_time_reminders(
+                [reminder for reminder in self.get_one_time_reminders() if format_datetime(reminder) != item["id"]]
+            )
+        elif item["kind"] == "Snoozed":
+            self.save_snoozes([snooze for snooze in self.get_snoozes() if format_datetime(snooze) != item["id"]])
+
+        self.mark_taken()
+
     def mark_taken(self):
         now = datetime.now()
         today = now.date().isoformat()
@@ -478,7 +782,7 @@ class PillReminderApp:
 
         taken_time = now.strftime("%Y-%m-%d at %H:%M")
         history = self.get_history()
-        history.append(taken_time)
+        history.append(f"{taken_time} - {self.get_pill_name()}")
 
         self.data["last_taken"] = today
         self.data["last_taken_time"] = taken_time
@@ -486,6 +790,30 @@ class PillReminderApp:
         self.data["snoozes"] = []
         self.save_data()
         self.refresh_all()
+
+    def undo_last_taken(self):
+        history = self.get_history()
+
+        if not history:
+            messagebox.showinfo("No History", "There is no taken history to undo.")
+            return
+
+        removed_entry = history.pop()
+        self.data["history"] = history[-HISTORY_LIMIT:]
+
+        latest_entry = self.get_latest_history_entry()
+
+        if latest_entry:
+            latest_date = parse_history_date(latest_entry)
+            self.data["last_taken"] = latest_date.isoformat()
+            self.data["last_taken_time"] = latest_entry.split(" - ", 1)[0]
+        else:
+            self.data.pop("last_taken", None)
+            self.data.pop("last_taken_time", None)
+
+        self.save_data()
+        self.refresh_all()
+        messagebox.showinfo("Undone", f"Removed: {removed_entry}")
 
     def reset_today(self):
         self.data.pop("last_taken", None)
@@ -500,8 +828,10 @@ class PillReminderApp:
             return
 
         self.data["history"] = []
+        self.data.pop("last_taken", None)
+        self.data.pop("last_taken_time", None)
         self.save_data()
-        self.refresh_history_list()
+        self.refresh_all()
 
     def snooze_reminder(self):
         snooze_time = (datetime.now() + timedelta(minutes=SNOOZE_MINUTES)).replace(second=0, microsecond=0)
@@ -512,12 +842,15 @@ class PillReminderApp:
         messagebox.showinfo("Snoozed", f"Reminder snoozed until {snooze_time:%H:%M}.")
 
     def send_mac_notification(self, message):
+        safe_message = message.replace('"', '\\"')
+        safe_title = APP_NAME.replace('"', '\\"')
+
         try:
             subprocess.run(
                 [
                     "osascript",
                     "-e",
-                    f'display notification "{message}" with title "{APP_NAME}"',
+                    f'display notification "{safe_message}" with title "{safe_title}"',
                 ],
                 check=False,
             )
@@ -525,31 +858,46 @@ class PillReminderApp:
             pass
 
     def show_reminder_popup(self, reminder_label=None):
-        message = "Time to take your birth control pill."
+        message = f"Time to take {self.get_pill_name()}."
         self.send_mac_notification(message)
 
         popup = tk.Toplevel(self.root)
         popup.title(APP_NAME)
-        popup.geometry("340x190")
+        popup.geometry("420x200")
         popup.resizable(False, False)
+        popup.configure(bg=WINDOW_BG)
 
-        ttk.Label(popup, text=message, style="Status.TLabel").pack(pady=(20, 8))
-        ttk.Label(popup, text=reminder_label or "Test reminder").pack()
+        tk.Label(
+            popup,
+            text=message,
+            bg=WINDOW_BG,
+            fg=TEXT_COLOR,
+            font=("Helvetica", 14, "bold"),
+            wraplength=300,
+        ).pack(pady=(20, 8))
+        tk.Label(
+            popup,
+            text=reminder_label or "Test reminder",
+            bg=WINDOW_BG,
+            fg=MUTED_COLOR,
+            font=("Helvetica", 12),
+        ).pack()
 
-        actions = ttk.Frame(popup)
+        actions = tk.Frame(popup, bg=WINDOW_BG)
         actions.pack(pady=18)
 
         if reminder_label:
-            ttk.Button(actions, text="Taken", command=lambda: [self.mark_taken(), popup.destroy()]).pack(
+            self.button(actions, "Taken", lambda: [self.mark_taken(), popup.destroy()]).pack(
                 side="left",
                 padx=4,
             )
-            ttk.Button(actions, text=f"Snooze {SNOOZE_MINUTES} Min", command=lambda: [self.snooze_reminder(), popup.destroy()]).pack(
-                side="left",
-                padx=4,
-            )
+            self.button(
+                actions,
+                f"Snooze {SNOOZE_MINUTES} Min",
+                lambda: [self.snooze_reminder(), popup.destroy()],
+            ).pack(side="left", padx=4)
 
-        ttk.Button(actions, text="Dismiss", command=popup.destroy).pack(side="left", padx=4)
+        self.button(actions, "Dismiss", popup.destroy).pack(side="left", padx=4)
 
     def show_test_reminder(self):
         self.show_reminder_popup()
