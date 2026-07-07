@@ -25,8 +25,10 @@ The app saves your reminder settings to:
 
 ## Current Features
 
-- Add custom reminder times.
-- Remove reminder times.
+- Add daily reminder times.
+- Add one-time reminders for any future date and time.
+- See all upcoming daily, one-time, and snoozed reminders.
+- Remove reminder times from the daily or upcoming reminder lists.
 - Mark the pill as taken for today.
 - View past taken times in the Taken history list.
 - Snooze from the reminder popup.
