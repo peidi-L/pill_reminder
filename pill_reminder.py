@@ -60,7 +60,7 @@ last_taken_time = app_data.get("last_taken_time")
 
 window = tk.Tk()
 window.title("Pill Reminder")
-window.geometry("440x360")
+window.geometry("460x460")
 
 title_label = tk.Label(window, text="Pill Reminder", font=("Helvetica", 20, "bold"))
 title_label.pack(pady=(20, 8))
@@ -110,10 +110,16 @@ def save_reminder_time():
 
 def mark_taken():
     time_taken = datetime.now()
+    formatted_time = time_taken.strftime("%Y-%m-%d at %H:%M")
+
     app_data["last_taken"] = time_taken.date().isoformat()
-    app_data["last_taken_time"] = time_taken.strftime("%Y-%m-%d at %H:%M")
+    app_data["last_taken_time"] = formatted_time
+    history = app_data.get("history", [])
+    history.append(formatted_time)
+    app_data["history"] = history[-5:]
     save_data()
-    status_label.config(text=f"Taken: {time_taken:%Y-%m-%d at %H:%M}")
+    status_label.config(text=f"Taken: {formatted_time}")
+    history_label.config(text=get_history_text())
 
 
 def reset_today():
@@ -122,6 +128,15 @@ def reset_today():
     app_data.pop("reminder_shown_for", None)
     save_data()
     status_label.config(text="Status: not taken today")
+
+
+def get_history_text():
+    history = app_data.get("history", [])
+
+    if not history:
+        return "Recent history: none yet"
+
+    return "Recent history:\n" + "\n".join(history[-5:])
 
 
 def check_reminder():
@@ -151,6 +166,9 @@ reset_button.pack(pady=4)
 
 test_button = tk.Button(window, text="Test Reminder", command=show_reminder)
 test_button.pack(pady=4)
+
+history_label = tk.Label(window, text=get_history_text(), justify="left")
+history_label.pack(pady=(8, 0))
 
 check_reminder()
 
