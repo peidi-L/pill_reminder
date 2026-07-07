@@ -9,15 +9,20 @@ import json
 import subprocess
 from tkinter import messagebox
 
-DATA_FILE = Path("pill_data.json")
+LEGACY_DATA_FILE = Path("pill_data.json")
+DATA_FILE = Path.home() / ".pill_reminder.json"
 
 
 def load_data():
-    if not DATA_FILE.exists():
+    if DATA_FILE.exists():
+        data_file = DATA_FILE
+    elif LEGACY_DATA_FILE.exists():
+        data_file = LEGACY_DATA_FILE
+    else:
         return {}
 
     try:
-        return json.loads(DATA_FILE.read_text())
+        return json.loads(data_file.read_text())
     except json.JSONDecodeError:
         return {}
 
@@ -57,11 +62,36 @@ def get_reminders_text():
     return "\n".join(reminders)
 
 
+def get_next_reminder_text():
+    reminders = app_data.get("reminders", ["21:00"])
+    now = datetime.now()
+    now_minutes = now.hour * 60 + now.minute
+    reminder_minutes = []
+
+    for reminder in reminders:
+        hour, minute = reminder.split(":")
+        reminder_minutes.append((int(hour) * 60 + int(minute), reminder))
+
+    for minutes, reminder in sorted(reminder_minutes):
+        if minutes > now_minutes:
+            if app_data.get("last_taken") == date.today().isoformat():
+                return f"Next reminder: tomorrow at {reminder}"
+
+            return f"Next reminder: today at {reminder}"
+
+    first_reminder = sorted(reminder_minutes)[0][1]
+    return f"Next reminder: tomorrow at {first_reminder}"
+
+
 def refresh_reminder_list():
     reminder_listbox.delete(0, tk.END)
 
     for reminder in app_data.get("reminders", ["21:00"]):
         reminder_listbox.insert(tk.END, reminder)
+
+
+def update_next_reminder_label():
+    next_reminder_label.config(text=get_next_reminder_text())
 
 
 def add_reminder_time(reminder_time):
@@ -75,6 +105,7 @@ def add_reminder_time(reminder_time):
     app_data["reminder_time"] = reminder_time
     save_data()
     refresh_reminder_list()
+    update_next_reminder_label()
     return True
 
 
@@ -111,11 +142,13 @@ def show_reminder(reminder_time=None):
     button_frame = tk.Frame(popup)
     button_frame.pack(pady=8)
 
-    tk.Button(button_frame, text="Taken", command=lambda: [mark_taken(), popup.destroy()]).pack(side="left", padx=4)
-    tk.Button(button_frame, text="Snooze 10 Min", command=lambda: [snooze_reminder(), popup.destroy()]).pack(
-        side="left",
-        padx=4,
-    )
+    if reminder_time:
+        tk.Button(button_frame, text="Taken", command=lambda: [mark_taken(), popup.destroy()]).pack(side="left", padx=4)
+        tk.Button(button_frame, text="Snooze 10 Min", command=lambda: [snooze_reminder(), popup.destroy()]).pack(
+            side="left",
+            padx=4,
+        )
+
     tk.Button(button_frame, text="Dismiss", command=popup.destroy).pack(side="left", padx=4)
 
 
@@ -128,13 +161,16 @@ last_taken_time = app_data.get("last_taken_time")
 
 window = tk.Tk()
 window.title("Pill Reminder")
-window.geometry("520x640")
+window.geometry("520x680")
 
 title_label = tk.Label(window, text="Pill Reminder", font=("Helvetica", 20, "bold"))
 title_label.pack(pady=(20, 8))
 
 instructions_label = tk.Label(window, text="Add your pill reminder times and mark the pill when you take it.")
 instructions_label.pack(pady=(0, 16))
+
+open_note_label = tk.Label(window, text="Keep this app open so reminders can appear.", fg="#555555")
+open_note_label.pack(pady=(0, 10))
 
 time_frame = tk.Frame(window)
 time_frame.pack(pady=4)
@@ -171,6 +207,9 @@ reminder_scrollbar = tk.Scrollbar(reminders_frame, orient="vertical", command=re
 reminder_scrollbar.pack(side="left", fill="y")
 reminder_listbox.config(yscrollcommand=reminder_scrollbar.set)
 refresh_reminder_list()
+
+next_reminder_label = tk.Label(window, text=get_next_reminder_text())
+next_reminder_label.pack(pady=(0, 10))
 
 if last_taken == date.today().isoformat():
     status_text = f"Status: taken today at {last_taken_time}"
@@ -217,6 +256,7 @@ def remove_selected_reminder():
     app_data["reminder_time"] = app_data["reminders"][0]
     save_data()
     refresh_reminder_list()
+    update_next_reminder_label()
     messagebox.showinfo("Removed", f"Removed reminder for {selected_time}.")
 
 
@@ -237,6 +277,7 @@ def mark_taken():
     save_data()
     status_label.config(text=f"Taken: {formatted_time}")
     history_label.config(text=get_history_text())
+    update_next_reminder_label()
 
 
 def reset_today():
@@ -246,6 +287,7 @@ def reset_today():
     app_data["reminders_shown"] = []
     save_data()
     status_label.config(text="Status: not taken today")
+    update_next_reminder_label()
 
 
 def clear_history():
@@ -260,10 +302,16 @@ def snooze_reminder():
     reminder_time = snooze_time.strftime("%H:%M")
     hour, minute = reminder_time.split(":")
     add_reminder_time(reminder_time)
+    reminder_key = f"{date.today().isoformat()}:{reminder_time}"
+    app_data["reminders_shown"] = [
+        shown_reminder for shown_reminder in app_data.get("reminders_shown", []) if shown_reminder != reminder_key
+    ]
+    save_data()
     hour_spinbox.delete(0, tk.END)
     hour_spinbox.insert(0, hour)
     minute_spinbox.delete(0, tk.END)
     minute_spinbox.insert(0, minute)
+    update_next_reminder_label()
     messagebox.showinfo("Snoozed", f"Reminder snoozed until {reminder_time}.")
 
 
