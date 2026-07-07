@@ -37,6 +37,7 @@ app_data = load_data()
 reminder_time = app_data.get("reminder_time", "21:00")
 last_taken = app_data.get("last_taken")
 last_taken_time = app_data.get("last_taken_time")
+reminder_shown_for = app_data.get("reminder_shown_for")
 
 window = tk.Tk()
 window.title("Pill Reminder")
@@ -96,10 +97,28 @@ def mark_taken():
     status_label.config(text=f"Taken: {time_taken:%Y-%m-%d at %H:%M}")
 
 
+def check_reminder():
+    now = datetime.now()
+    today = now.date().isoformat()
+    current_time = now.strftime("%H:%M")
+
+    already_taken = app_data.get("last_taken") == today
+    already_reminded = app_data.get("reminder_shown_for") == today
+
+    if current_time == app_data.get("reminder_time", "21:00") and not already_taken and not already_reminded:
+        app_data["reminder_shown_for"] = today
+        save_data()
+        messagebox.showinfo("Pill Reminder", "Time to take your birth control pill.")
+
+    window.after(30000, check_reminder)
+
+
 save_button = tk.Button(window, text="Save Reminder Time", command=save_reminder_time)
 save_button.pack(pady=4)
 
 taken_button = tk.Button(window, text="Taken Today", command=mark_taken)
 taken_button.pack(pady=8)
+
+check_reminder()
 
 window.mainloop()
