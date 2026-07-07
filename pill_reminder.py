@@ -217,7 +217,7 @@ last_taken_time = app_data.get("last_taken_time")
 
 window = tk.Tk()
 window.title("Pill Reminder")
-window.geometry("560x760")
+window.geometry("600x760")
 
 title_label = tk.Label(window, text="Pill Reminder", font=("Helvetica", 20, "bold"))
 title_label.pack(pady=(20, 8))
@@ -264,6 +264,9 @@ reminder_scrollbar.pack(side="left", fill="y")
 reminder_listbox.config(yscrollcommand=reminder_scrollbar.set)
 refresh_reminder_list()
 
+reminder_actions_frame = tk.Frame(window)
+reminder_actions_frame.pack(pady=(0, 12))
+
 next_reminder_label = tk.Label(window, text=get_next_reminder_text())
 next_reminder_label.pack(pady=(0, 10))
 
@@ -276,6 +279,9 @@ else:
 
 status_label = tk.Label(window, text=status_text)
 status_label.pack(pady=6)
+
+today_actions_frame = tk.Frame(window)
+today_actions_frame.pack(pady=(0, 10))
 
 taken_history_frame = tk.Frame(window)
 taken_history_frame.pack(pady=(8, 12))
@@ -290,6 +296,9 @@ history_scrollbar = tk.Scrollbar(taken_history_frame, orient="vertical", command
 history_scrollbar.pack(side="left", fill="y")
 history_listbox.config(yscrollcommand=history_scrollbar.set)
 refresh_history_list()
+
+tool_actions_frame = tk.Frame(window)
+tool_actions_frame.pack(pady=(0, 10))
 
 
 def add_new_reminder():
@@ -422,23 +431,23 @@ def check_reminder():
     window.after(CHECK_INTERVAL_MS, check_reminder)
 
 
-save_button = tk.Button(window, text="Add Reminder", command=add_new_reminder)
-save_button.pack(pady=4)
+save_button = tk.Button(reminder_actions_frame, text="Add Reminder", command=add_new_reminder)
+save_button.pack(side="left", padx=4)
 
-remove_button = tk.Button(window, text="Remove Selected Reminder", command=remove_selected_reminder)
-remove_button.pack(pady=4)
+remove_button = tk.Button(reminder_actions_frame, text="Remove Selected Reminder", command=remove_selected_reminder)
+remove_button.pack(side="left", padx=4)
 
-taken_button = tk.Button(window, text="Taken Today", command=mark_taken)
-taken_button.pack(pady=8)
+taken_button = tk.Button(today_actions_frame, text="Taken Today", command=mark_taken)
+taken_button.pack(side="left", padx=4)
 
-reset_button = tk.Button(window, text="Reset Today", command=reset_today)
-reset_button.pack(pady=4)
+reset_button = tk.Button(today_actions_frame, text="Reset Today", command=reset_today)
+reset_button.pack(side="left", padx=4)
 
-clear_history_button = tk.Button(window, text="Clear History", command=clear_history)
-clear_history_button.pack(pady=4)
+clear_history_button = tk.Button(tool_actions_frame, text="Clear History", command=clear_history)
+clear_history_button.pack(side="left", padx=4)
 
-test_button = tk.Button(window, text="Test Notification", command=show_reminder)
-test_button.pack(pady=4)
+test_button = tk.Button(tool_actions_frame, text="Test Notification", command=show_reminder)
+test_button.pack(side="left", padx=4)
 
 check_reminder()
 
