@@ -5,6 +5,7 @@ import tkinter as tk
 from datetime import date, datetime
 from pathlib import Path
 import json
+from tkinter import messagebox
 
 DATA_FILE = Path("pill_data.json")
 
@@ -23,9 +24,19 @@ def save_data():
     DATA_FILE.write_text(json.dumps(app_data, indent=2))
 
 
+def is_valid_time(value):
+    try:
+        datetime.strptime(value, "%H:%M")
+    except ValueError:
+        return False
+
+    return True
+
+
 app_data = load_data()
 reminder_time = app_data.get("reminder_time", "21:00")
 last_taken = app_data.get("last_taken")
+last_taken_time = app_data.get("last_taken_time")
 
 window = tk.Tk()
 window.title("Pill Reminder")
@@ -51,21 +62,30 @@ reminder_label = tk.Label(window, text=f"Next reminder: {reminder_time}")
 reminder_label.pack(pady=(8, 16))
 
 if last_taken == date.today().isoformat():
-    status_text = "Status: taken today"
-elif last_taken:
-    status_text = f"Last taken: {last_taken}"
+    status_text = f"Status: taken today at {last_taken_time}"
+elif last_taken_time:
+    status_text = f"Last taken: {last_taken_time}"
 else:
     status_text = "Status: not taken today"
 
 status_label = tk.Label(window, text=status_text)
 status_label.pack(pady=6)
 
+tip_label = tk.Label(window, text="Use 24-hour time, like 09:00 or 21:30.")
+tip_label.pack(pady=(0, 10))
+
 
 def save_reminder_time():
-    reminder_time = time_entry.get()
+    reminder_time = time_entry.get().strip()
+
+    if not is_valid_time(reminder_time):
+        messagebox.showerror("Invalid time", "Please enter time as HH:MM, like 21:00.")
+        return
+
     app_data["reminder_time"] = reminder_time
     save_data()
     reminder_label.config(text=f"Next reminder: {reminder_time}")
+    messagebox.showinfo("Saved", f"Reminder time saved for {reminder_time}.")
 
 
 def mark_taken():
