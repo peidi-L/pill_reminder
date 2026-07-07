@@ -11,6 +11,8 @@ from tkinter import messagebox
 
 LEGACY_DATA_FILE = Path("pill_data.json")
 DATA_FILE = Path.home() / ".pill_reminder.json"
+SNOOZE_FORMAT = "%Y-%m-%d %H:%M"
+CHECK_INTERVAL_MS = 15000
 
 
 def load_data():
@@ -40,6 +42,11 @@ def is_valid_time(value):
     return True
 
 
+def time_to_minutes(value):
+    hour, minute = value.split(":")
+    return int(hour) * 60 + int(minute)
+
+
 def get_saved_reminders():
     saved_reminders = app_data.get("reminders")
 
@@ -62,25 +69,53 @@ def get_reminders_text():
     return "\n".join(reminders)
 
 
+def get_valid_snoozes():
+    snoozes = app_data.get("snoozes", [])
+    valid_snoozes = []
+
+    if not isinstance(snoozes, list):
+        return valid_snoozes
+
+    for snooze in snoozes:
+        try:
+            valid_snoozes.append(datetime.strptime(snooze, SNOOZE_FORMAT))
+        except ValueError:
+            continue
+
+    return sorted(valid_snoozes)
+
+
+def save_snoozes(snoozes):
+    app_data["snoozes"] = [snooze.strftime(SNOOZE_FORMAT) for snooze in sorted(snoozes)]
+    save_data()
+
+
 def get_next_reminder_text():
     reminders = app_data.get("reminders", ["21:00"])
     now = datetime.now()
-    now_minutes = now.hour * 60 + now.minute
-    reminder_minutes = []
+    today = date.today()
+    candidates = []
+
+    for snooze in get_valid_snoozes():
+        if snooze >= now:
+            candidates.append((snooze, "snoozed"))
 
     for reminder in reminders:
         hour, minute = reminder.split(":")
-        reminder_minutes.append((int(hour) * 60 + int(minute), reminder))
+        reminder_time = datetime(today.year, today.month, today.day, int(hour), int(minute))
 
-    for minutes, reminder in sorted(reminder_minutes):
-        if minutes > now_minutes:
-            if app_data.get("last_taken") == date.today().isoformat():
-                return f"Next reminder: tomorrow at {reminder}"
+        if app_data.get("last_taken") == today.isoformat() or reminder_time <= now:
+            reminder_time += timedelta(days=1)
 
-            return f"Next reminder: today at {reminder}"
+        candidates.append((reminder_time, "daily"))
 
-    first_reminder = sorted(reminder_minutes)[0][1]
-    return f"Next reminder: tomorrow at {first_reminder}"
+    next_time, reminder_type = min(candidates, key=lambda candidate: candidate[0])
+    day_text = "today" if next_time.date() == today else "tomorrow"
+
+    if reminder_type == "snoozed":
+        return f"Next reminder: snoozed until {day_text} at {next_time:%H:%M}"
+
+    return f"Next reminder: {day_text} at {next_time:%H:%M}"
 
 
 def refresh_reminder_list():
@@ -271,6 +306,7 @@ def mark_taken():
 
     app_data["last_taken"] = today
     app_data["last_taken_time"] = formatted_time
+    app_data["snoozes"] = []
     history = app_data.get("history", [])
     history.append(formatted_time)
     app_data["history"] = history[-5:]
@@ -285,6 +321,7 @@ def reset_today():
     app_data.pop("last_taken_time", None)
     app_data.pop("reminder_shown_for", None)
     app_data["reminders_shown"] = []
+    app_data["snoozes"] = []
     save_data()
     status_label.config(text="Status: not taken today")
     update_next_reminder_label()
@@ -299,14 +336,12 @@ def clear_history():
 
 def snooze_reminder():
     snooze_time = datetime.now() + timedelta(minutes=10)
+    snooze_time = snooze_time.replace(second=0, microsecond=0)
     reminder_time = snooze_time.strftime("%H:%M")
     hour, minute = reminder_time.split(":")
-    add_reminder_time(reminder_time)
-    reminder_key = f"{date.today().isoformat()}:{reminder_time}"
-    app_data["reminders_shown"] = [
-        shown_reminder for shown_reminder in app_data.get("reminders_shown", []) if shown_reminder != reminder_key
-    ]
-    save_data()
+    snoozes = get_valid_snoozes()
+    snoozes.append(snooze_time)
+    save_snoozes(snoozes)
     hour_spinbox.delete(0, tk.END)
     hour_spinbox.insert(0, hour)
     minute_spinbox.delete(0, tk.END)
@@ -327,19 +362,38 @@ def get_history_text():
 def check_reminder():
     now = datetime.now()
     today = now.date().isoformat()
-    current_time = now.strftime("%H:%M")
+    current_minutes = now.hour * 60 + now.minute
 
     already_taken = app_data.get("last_taken") == today
-    reminder_key = f"{today}:{current_time}"
     reminders_shown = app_data.get("reminders_shown", [])
 
-    if current_time in app_data.get("reminders", ["21:00"]) and not already_taken and reminder_key not in reminders_shown:
-        reminders_shown.append(reminder_key)
-        app_data["reminders_shown"] = reminders_shown[-20:]
-        save_data()
-        show_reminder(current_time)
+    if not already_taken:
+        snoozes = get_valid_snoozes()
+        due_snoozes = [snooze for snooze in snoozes if snooze <= now]
 
-    window.after(30000, check_reminder)
+        if due_snoozes:
+            due_snooze = due_snoozes[0]
+            save_snoozes([snooze for snooze in snoozes if snooze != due_snooze])
+            update_next_reminder_label()
+            show_reminder(due_snooze.strftime("%H:%M"))
+            window.after(CHECK_INTERVAL_MS, check_reminder)
+            return
+
+        for reminder in app_data.get("reminders", ["21:00"]):
+            reminder_key = f"{today}:{reminder}"
+
+            if time_to_minutes(reminder) <= current_minutes and reminder_key not in reminders_shown:
+                reminders_shown.append(reminder_key)
+                app_data["reminders_shown"] = reminders_shown[-20:]
+                save_data()
+                update_next_reminder_label()
+                show_reminder(reminder)
+                window.after(CHECK_INTERVAL_MS, check_reminder)
+                return
+
+    update_next_reminder_label()
+
+    window.after(CHECK_INTERVAL_MS, check_reminder)
 
 
 save_button = tk.Button(window, text="Add Reminder", command=add_new_reminder)
