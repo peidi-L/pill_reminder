@@ -6,6 +6,7 @@ import tkinter as tk
 from datetime import date, datetime
 from pathlib import Path
 import json
+import subprocess
 from tkinter import messagebox
 
 DATA_FILE = Path("pill_data.json")
@@ -32,6 +33,24 @@ def is_valid_time(value):
         return False
 
     return True
+
+
+def show_reminder():
+    message = "Time to take your birth control pill."
+
+    try:
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'display notification "{message}" with title "Pill Reminder"',
+            ],
+            check=False,
+        )
+    except FileNotFoundError:
+        pass
+
+    messagebox.showinfo("Pill Reminder", message)
 
 
 app_data = load_data()
@@ -116,7 +135,7 @@ def check_reminder():
     if current_time == app_data.get("reminder_time", "21:00") and not already_taken and not already_reminded:
         app_data["reminder_shown_for"] = today
         save_data()
-        messagebox.showinfo("Pill Reminder", "Time to take your birth control pill.")
+        show_reminder()
 
     window.after(30000, check_reminder)
 
@@ -129,6 +148,9 @@ taken_button.pack(pady=8)
 
 reset_button = tk.Button(window, text="Reset Today", command=reset_today)
 reset_button.pack(pady=4)
+
+test_button = tk.Button(window, text="Test Reminder", command=show_reminder)
+test_button.pack(pady=4)
 
 check_reminder()
 
