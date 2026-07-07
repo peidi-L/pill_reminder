@@ -109,8 +109,8 @@ class PillReminderApp:
         self.upcoming_items = []
 
         self.root.title(APP_NAME)
-        self.root.geometry("760x620")
-        self.root.minsize(720, 560)
+        self.root.geometry("900x760")
+        self.root.minsize(840, 680)
 
         self.configure_style()
         self.build_ui()
@@ -138,67 +138,30 @@ class PillReminderApp:
             pady=(2, 12),
         )
 
-        self.notebook = ttk.Notebook(main)
-        self.notebook.pack(fill="both", expand=True)
+        body = ttk.Frame(main)
+        body.pack(fill="both", expand=True)
+        body.columnconfigure(0, weight=1)
+        body.columnconfigure(1, weight=1)
+        body.rowconfigure(1, weight=1)
 
-        self.today_tab = ttk.Frame(self.notebook, padding=12)
-        self.reminders_tab = ttk.Frame(self.notebook, padding=12)
-        self.history_tab = ttk.Frame(self.notebook, padding=12)
-        self.settings_tab = ttk.Frame(self.notebook, padding=12)
+        today_frame = ttk.LabelFrame(body, text="Today", padding=12)
+        today_frame.grid(row=0, column=0, sticky="ew", padx=(0, 8), pady=(0, 12))
 
-        self.notebook.add(self.today_tab, text="Today")
-        self.notebook.add(self.reminders_tab, text="Reminders")
-        self.notebook.add(self.history_tab, text="History")
-        self.notebook.add(self.settings_tab, text="Settings")
-
-        self.build_today_tab()
-        self.build_reminders_tab()
-        self.build_history_tab()
-        self.build_settings_tab()
-
-    def build_today_tab(self):
-        status_frame = ttk.LabelFrame(self.today_tab, text="Today", padding=12)
-        status_frame.pack(fill="x")
-
-        self.status_label = ttk.Label(status_frame, text="", style="Status.TLabel")
+        self.status_label = ttk.Label(today_frame, text="", style="Status.TLabel")
         self.status_label.pack(anchor="w")
 
-        self.next_label = ttk.Label(status_frame, text="")
+        self.next_label = ttk.Label(today_frame, text="")
         self.next_label.pack(anchor="w", pady=(6, 0))
 
-        today_actions = ttk.Frame(status_frame)
+        today_actions = ttk.Frame(today_frame)
         today_actions.pack(anchor="w", pady=(12, 0))
 
         ttk.Button(today_actions, text="Taken Today", command=self.mark_taken).pack(side="left", padx=(0, 8))
         ttk.Button(today_actions, text="Reset Today", command=self.reset_today).pack(side="left", padx=(0, 8))
         ttk.Button(today_actions, text="Test Reminder", command=self.show_test_reminder).pack(side="left")
 
-        upcoming_frame = ttk.LabelFrame(self.today_tab, text="Upcoming Reminders", padding=12)
-        upcoming_frame.pack(fill="both", expand=True, pady=(14, 0))
-
-        self.upcoming_tree = ttk.Treeview(upcoming_frame, columns=("when", "kind"), show="headings", height=10)
-        self.upcoming_tree.heading("when", text="When")
-        self.upcoming_tree.heading("kind", text="Type")
-        self.upcoming_tree.column("when", width=210, anchor="w")
-        self.upcoming_tree.column("kind", width=180, anchor="w")
-        self.upcoming_tree.pack(side="left", fill="both", expand=True)
-
-        upcoming_scrollbar = ttk.Scrollbar(upcoming_frame, orient="vertical", command=self.upcoming_tree.yview)
-        upcoming_scrollbar.pack(side="left", fill="y")
-        self.upcoming_tree.configure(yscrollcommand=upcoming_scrollbar.set)
-
-        upcoming_actions = ttk.Frame(self.today_tab)
-        upcoming_actions.pack(anchor="w", pady=(10, 0))
-
-        ttk.Button(upcoming_actions, text="Remove Selected Upcoming", command=self.remove_selected_upcoming).pack(
-            side="left",
-            padx=(0, 8),
-        )
-        ttk.Button(upcoming_actions, text="Refresh", command=self.refresh_all).pack(side="left")
-
-    def build_reminders_tab(self):
-        daily_frame = ttk.LabelFrame(self.reminders_tab, text="Daily Reminders", padding=12)
-        daily_frame.pack(fill="x")
+        daily_frame = ttk.LabelFrame(body, text="Daily Reminders", padding=12)
+        daily_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8), pady=(0, 12))
 
         daily_input = ttk.Frame(daily_frame)
         daily_input.pack(anchor="w")
@@ -218,25 +181,25 @@ class PillReminderApp:
         self.daily_minute.insert(0, default_minute)
         self.daily_minute.pack(side="left")
 
-        ttk.Button(daily_input, text="Add Daily Reminder", command=self.add_daily_reminder).pack(side="left", padx=(12, 0))
+        ttk.Button(daily_input, text="Add Daily", command=self.add_daily_reminder).pack(side="left", padx=(12, 0))
 
         daily_list_frame = ttk.Frame(daily_frame)
-        daily_list_frame.pack(anchor="w", pady=(12, 0))
+        daily_list_frame.pack(anchor="w", fill="x", pady=(12, 0))
 
-        self.daily_listbox = tk.Listbox(daily_list_frame, height=5, width=18, exportselection=False)
-        self.daily_listbox.pack(side="left")
+        self.daily_listbox = tk.Listbox(daily_list_frame, height=5, width=20, exportselection=False)
+        self.daily_listbox.pack(side="left", fill="x", expand=True)
 
         daily_scrollbar = ttk.Scrollbar(daily_list_frame, orient="vertical", command=self.daily_listbox.yview)
         daily_scrollbar.pack(side="left", fill="y")
         self.daily_listbox.configure(yscrollcommand=daily_scrollbar.set)
 
-        ttk.Button(daily_frame, text="Remove Selected Daily Reminder", command=self.remove_selected_daily).pack(
+        ttk.Button(daily_frame, text="Remove Selected Daily", command=self.remove_selected_daily).pack(
             anchor="w",
             pady=(10, 0),
         )
 
-        one_time_frame = ttk.LabelFrame(self.reminders_tab, text="One-Time Reminder", padding=12)
-        one_time_frame.pack(fill="x", pady=(16, 0))
+        one_time_frame = ttk.LabelFrame(body, text="One-Time Reminder", padding=12)
+        one_time_frame.grid(row=2, column=0, sticky="ew", padx=(0, 8))
 
         one_time_input = ttk.Frame(one_time_frame)
         one_time_input.pack(anchor="w")
@@ -262,45 +225,57 @@ class PillReminderApp:
         self.one_time_minute.insert(0, default_one_time.strftime("%M"))
         self.one_time_minute.pack(side="left")
 
-        ttk.Button(one_time_input, text="Add One-Time Reminder", command=self.add_one_time_reminder).pack(
-            side="left",
-            padx=(12, 0),
-        )
-
+        ttk.Button(one_time_input, text="Add One-Time", command=self.add_one_time_reminder).pack(side="left", padx=(12, 0))
         ttk.Label(one_time_frame, text="Date format: YYYY-MM-DD", style="Muted.TLabel").pack(anchor="w", pady=(8, 0))
 
-    def build_history_tab(self):
-        history_frame = ttk.LabelFrame(self.history_tab, text="Taken History", padding=12)
-        history_frame.pack(fill="both", expand=True)
+        upcoming_frame = ttk.LabelFrame(body, text="Upcoming Reminders", padding=12)
+        upcoming_frame.grid(row=0, column=1, rowspan=2, sticky="nsew", padx=(8, 0), pady=(0, 12))
+        upcoming_frame.rowconfigure(0, weight=1)
+        upcoming_frame.columnconfigure(0, weight=1)
 
-        self.history_listbox = tk.Listbox(history_frame, height=16, width=42, exportselection=False)
-        self.history_listbox.pack(side="left", fill="both", expand=True)
+        self.upcoming_tree = ttk.Treeview(upcoming_frame, columns=("when", "kind"), show="headings", height=13)
+        self.upcoming_tree.heading("when", text="When")
+        self.upcoming_tree.heading("kind", text="Type")
+        self.upcoming_tree.column("when", width=210, anchor="w")
+        self.upcoming_tree.column("kind", width=150, anchor="w")
+        self.upcoming_tree.grid(row=0, column=0, sticky="nsew")
+
+        upcoming_scrollbar = ttk.Scrollbar(upcoming_frame, orient="vertical", command=self.upcoming_tree.yview)
+        upcoming_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.upcoming_tree.configure(yscrollcommand=upcoming_scrollbar.set)
+
+        upcoming_actions = ttk.Frame(upcoming_frame)
+        upcoming_actions.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
+
+        ttk.Button(upcoming_actions, text="Remove Selected", command=self.remove_selected_upcoming).pack(
+            side="left",
+            padx=(0, 8),
+        )
+        ttk.Button(upcoming_actions, text="Refresh", command=self.refresh_all).pack(side="left")
+
+        history_frame = ttk.LabelFrame(body, text="Taken History", padding=12)
+        history_frame.grid(row=2, column=1, sticky="nsew", padx=(8, 0))
+        history_frame.rowconfigure(0, weight=1)
+        history_frame.columnconfigure(0, weight=1)
+
+        self.history_listbox = tk.Listbox(history_frame, height=8, width=42, exportselection=False)
+        self.history_listbox.grid(row=0, column=0, sticky="nsew")
 
         history_scrollbar = ttk.Scrollbar(history_frame, orient="vertical", command=self.history_listbox.yview)
-        history_scrollbar.pack(side="left", fill="y")
+        history_scrollbar.grid(row=0, column=1, sticky="ns")
         self.history_listbox.configure(yscrollcommand=history_scrollbar.set)
 
-        history_actions = ttk.Frame(self.history_tab)
-        history_actions.pack(anchor="w", pady=(10, 0))
+        history_actions = ttk.Frame(history_frame)
+        history_actions.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
         ttk.Button(history_actions, text="Clear History", command=self.clear_history).pack(side="left")
 
-    def build_settings_tab(self):
-        settings_frame = ttk.LabelFrame(self.settings_tab, text="App Settings", padding=12)
-        settings_frame.pack(fill="x")
+        footer = ttk.Frame(main)
+        footer.pack(fill="x", pady=(12, 0))
 
-        ttk.Label(settings_frame, text="Reminder checks run while this app is open.").pack(anchor="w")
-        ttk.Label(settings_frame, text="Keep a backup phone or calendar reminder while testing.", style="Muted.TLabel").pack(
-            anchor="w",
-            pady=(4, 12),
-        )
-        ttk.Label(settings_frame, text=f"Data file: {DATA_FILE}", style="Muted.TLabel").pack(anchor="w")
-
-        settings_actions = ttk.Frame(settings_frame)
-        settings_actions.pack(anchor="w", pady=(12, 0))
-
-        ttk.Button(settings_actions, text="Open Data Folder", command=self.open_data_folder).pack(side="left", padx=(0, 8))
-        ttk.Button(settings_actions, text="Save Now", command=self.save_data).pack(side="left")
+        ttk.Label(footer, text="Keep this app open so reminders can appear.", style="Muted.TLabel").pack(side="left")
+        ttk.Button(footer, text="Open Data Folder", command=self.open_data_folder).pack(side="right", padx=(8, 0))
+        ttk.Button(footer, text="Save Now", command=self.save_data).pack(side="right")
 
     def save_data(self):
         APP_DIR.mkdir(parents=True, exist_ok=True)

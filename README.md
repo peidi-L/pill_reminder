@@ -25,7 +25,7 @@ The app saves your reminder settings to:
 
 ## Current Features
 
-- Tabbed desktop interface: Today, Reminders, History, and Settings.
+- Dashboard interface with Today, Daily Reminders, One-Time Reminder, Upcoming Reminders, and History visible.
 - Add daily reminder times.
 - Add one-time reminders for any future date and time.
 - See all upcoming daily, one-time, and snoozed reminders.
@@ -34,7 +34,7 @@ The app saves your reminder settings to:
 - View past taken times in the Taken history list.
 - Snooze from the reminder popup.
 - Get a macOS notification and an app popup.
-- Open the app data folder from Settings.
+- Open the app data folder from the dashboard footer.
 
 ## Important
 
