@@ -54,7 +54,14 @@ def get_saved_reminders():
 
 def get_reminders_text():
     reminders = app_data.get("reminders", ["21:00"])
-    return "Reminder times: " + ", ".join(reminders)
+    return "\n".join(reminders)
+
+
+def refresh_reminder_list():
+    reminder_listbox.delete(0, tk.END)
+
+    for reminder in app_data.get("reminders", ["21:00"]):
+        reminder_listbox.insert(tk.END, reminder)
 
 
 def add_reminder_time(reminder_time):
@@ -67,7 +74,7 @@ def add_reminder_time(reminder_time):
     app_data["reminders"] = sorted(reminders)
     app_data["reminder_time"] = reminder_time
     save_data()
-    reminder_label.config(text=get_reminders_text())
+    refresh_reminder_list()
     return True
 
 
@@ -121,18 +128,18 @@ last_taken_time = app_data.get("last_taken_time")
 
 window = tk.Tk()
 window.title("Pill Reminder")
-window.geometry("460x500")
+window.geometry("520x640")
 
 title_label = tk.Label(window, text="Pill Reminder", font=("Helvetica", 20, "bold"))
 title_label.pack(pady=(20, 8))
 
-instructions_label = tk.Label(window, text="Set your reminder time and mark when you take it.")
+instructions_label = tk.Label(window, text="Add your pill reminder times and mark the pill when you take it.")
 instructions_label.pack(pady=(0, 16))
 
 time_frame = tk.Frame(window)
 time_frame.pack(pady=4)
 
-time_label = tk.Label(time_frame, text="Reminder time:")
+time_label = tk.Label(time_frame, text="Add reminder:")
 time_label.pack(side="left", padx=(0, 8))
 
 hour_spinbox = tk.Spinbox(time_frame, from_=0, to=23, width=3, format="%02.0f")
@@ -148,8 +155,22 @@ minute_spinbox.delete(0, tk.END)
 minute_spinbox.insert(0, reminder_minute)
 minute_spinbox.pack(side="left")
 
-reminder_label = tk.Label(window, text=get_reminders_text())
-reminder_label.pack(pady=(8, 16))
+tip_label = tk.Label(window, text="Choose any 24-hour time, like 09:00 or 21:30.")
+tip_label.pack(pady=(8, 10))
+
+reminders_frame = tk.Frame(window)
+reminders_frame.pack(pady=(0, 14))
+
+reminders_title = tk.Label(reminders_frame, text="Reminder times")
+reminders_title.pack(anchor="w")
+
+reminder_listbox = tk.Listbox(reminders_frame, height=5, width=18)
+reminder_listbox.pack(side="left")
+
+reminder_scrollbar = tk.Scrollbar(reminders_frame, orient="vertical", command=reminder_listbox.yview)
+reminder_scrollbar.pack(side="left", fill="y")
+reminder_listbox.config(yscrollcommand=reminder_scrollbar.set)
+refresh_reminder_list()
 
 if last_taken == date.today().isoformat():
     status_text = f"Status: taken today at {last_taken_time}"
@@ -160,9 +181,6 @@ else:
 
 status_label = tk.Label(window, text=status_text)
 status_label.pack(pady=6)
-
-tip_label = tk.Label(window, text="Choose a 24-hour time, like 09:00 or 21:30.")
-tip_label.pack(pady=(0, 10))
 
 
 def add_new_reminder():
@@ -179,6 +197,27 @@ def add_new_reminder():
         return
 
     messagebox.showinfo("Added", f"New reminder added for {reminder_time}.")
+
+
+def remove_selected_reminder():
+    selected_indexes = reminder_listbox.curselection()
+
+    if not selected_indexes:
+        messagebox.showinfo("No Reminder Selected", "Select a reminder time to remove.")
+        return
+
+    selected_time = reminder_listbox.get(selected_indexes[0])
+    reminders = app_data.get("reminders", [])
+
+    if len(reminders) == 1:
+        messagebox.showinfo("Keep One Reminder", "You need at least one reminder time.")
+        return
+
+    app_data["reminders"] = [reminder for reminder in reminders if reminder != selected_time]
+    app_data["reminder_time"] = app_data["reminders"][0]
+    save_data()
+    refresh_reminder_list()
+    messagebox.showinfo("Removed", f"Removed reminder for {selected_time}.")
 
 
 def mark_taken():
@@ -258,6 +297,9 @@ def check_reminder():
 save_button = tk.Button(window, text="Add Reminder", command=add_new_reminder)
 save_button.pack(pady=4)
 
+remove_button = tk.Button(window, text="Remove Selected Reminder", command=remove_selected_reminder)
+remove_button.pack(pady=4)
+
 taken_button = tk.Button(window, text="Taken Today", command=mark_taken)
 taken_button.pack(pady=8)
 
@@ -267,7 +309,7 @@ reset_button.pack(pady=4)
 clear_history_button = tk.Button(window, text="Clear History", command=clear_history)
 clear_history_button.pack(pady=4)
 
-test_button = tk.Button(window, text="Test Reminder", command=show_reminder)
+test_button = tk.Button(window, text="Test Notification", command=show_reminder)
 test_button.pack(pady=4)
 
 history_label = tk.Label(window, text=get_history_text(), justify="left")
