@@ -35,6 +35,15 @@ def is_valid_time(value):
     return True
 
 
+def get_saved_reminder_time():
+    saved_time = app_data.get("reminder_time", "21:00")
+
+    if is_valid_time(saved_time):
+        return saved_time
+
+    return "21:00"
+
+
 def show_reminder():
     message = "Time to take your birth control pill."
 
@@ -54,7 +63,8 @@ def show_reminder():
 
 
 app_data = load_data()
-reminder_time = app_data.get("reminder_time", "21:00")
+reminder_time = get_saved_reminder_time()
+reminder_hour, reminder_minute = reminder_time.split(":")
 last_taken = app_data.get("last_taken")
 last_taken_time = app_data.get("last_taken_time")
 
@@ -74,9 +84,18 @@ time_frame.pack(pady=4)
 time_label = tk.Label(time_frame, text="Reminder time:")
 time_label.pack(side="left", padx=(0, 8))
 
-time_entry = tk.Entry(time_frame, width=8)
-time_entry.insert(0, reminder_time)
-time_entry.pack(side="left")
+hour_spinbox = tk.Spinbox(time_frame, from_=0, to=23, width=3, format="%02.0f")
+hour_spinbox.delete(0, tk.END)
+hour_spinbox.insert(0, reminder_hour)
+hour_spinbox.pack(side="left")
+
+time_separator = tk.Label(time_frame, text=":")
+time_separator.pack(side="left", padx=4)
+
+minute_spinbox = tk.Spinbox(time_frame, from_=0, to=59, width=3, format="%02.0f")
+minute_spinbox.delete(0, tk.END)
+minute_spinbox.insert(0, reminder_minute)
+minute_spinbox.pack(side="left")
 
 reminder_label = tk.Label(window, text=f"Next reminder: {reminder_time}")
 reminder_label.pack(pady=(8, 16))
@@ -91,12 +110,14 @@ else:
 status_label = tk.Label(window, text=status_text)
 status_label.pack(pady=6)
 
-tip_label = tk.Label(window, text="Use 24-hour time, like 09:00 or 21:30.")
+tip_label = tk.Label(window, text="Choose a 24-hour time, like 09:00 or 21:30.")
 tip_label.pack(pady=(0, 10))
 
 
 def save_reminder_time():
-    reminder_time = time_entry.get().strip()
+    hour = hour_spinbox.get().strip().zfill(2)
+    minute = minute_spinbox.get().strip().zfill(2)
+    reminder_time = f"{hour}:{minute}"
 
     if not is_valid_time(reminder_time):
         messagebox.showerror("Invalid time", "Please enter time as HH:MM, like 21:00.")
@@ -133,11 +154,14 @@ def reset_today():
 def snooze_reminder():
     snooze_time = datetime.now() + timedelta(minutes=10)
     reminder_time = snooze_time.strftime("%H:%M")
+    hour, minute = reminder_time.split(":")
     app_data["reminder_time"] = reminder_time
     app_data.pop("reminder_shown_for", None)
     save_data()
-    time_entry.delete(0, tk.END)
-    time_entry.insert(0, reminder_time)
+    hour_spinbox.delete(0, tk.END)
+    hour_spinbox.insert(0, hour)
+    minute_spinbox.delete(0, tk.END)
+    minute_spinbox.insert(0, minute)
     reminder_label.config(text=f"Next reminder: {reminder_time}")
     messagebox.showinfo("Snoozed", f"Reminder snoozed until {reminder_time}.")
 
