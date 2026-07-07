@@ -2,6 +2,7 @@
 # This is a simple pill reminder application that helps users keep track of their medication schedule. The app allows users to set reminders for taking their pills at specific times and provides notifications to ensure they don't miss a dose.
 
 import tkinter as tk
+from datetime import date
 
 window = tk.Tk()
 window.title("Pill Reminder")
@@ -14,7 +15,8 @@ status_label = tk.Label(window, text="Not taken today")
 status_label.pack()
 
 def mark_taken():
-    status_label.config(text="Taken today")
+    today = date.today()
+    status_label.config(text=f"Taken today: {today}")
 
 taken_button = tk.Button(window, text="Taken Today", command=mark_taken)
 taken_button.pack()
