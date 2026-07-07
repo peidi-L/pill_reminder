@@ -7,6 +7,7 @@ from tkinter import messagebox
 
 
 APP_NAME = "Pill Reminder"
+APP_VERSION = "Dashboard v2"
 APP_DIR = Path.home() / "Library" / "Application Support" / APP_NAME
 DATA_FILE = APP_DIR / "data.json"
 LEGACY_HOME_DATA_FILE = Path.home() / ".pill_reminder.json"
@@ -169,9 +170,9 @@ class PillReminderApp:
         self.data = prepare_data(load_data())
         self.upcoming_items = []
 
-        self.root.title(APP_NAME)
-        self.root.geometry("1040x820")
-        self.root.minsize(940, 760)
+        self.root.title(f"{APP_NAME} - {APP_VERSION}")
+        self.root.geometry("980x760")
+        self.root.minsize(900, 700)
 
         self.configure_style()
         self.build_ui()
@@ -181,19 +182,28 @@ class PillReminderApp:
 
     def configure_style(self):
         self.root.configure(bg=WINDOW_BG)
+        self.root.option_add("*Label.foreground", TEXT_COLOR)
+        self.root.option_add("*Label.background", CARD_BG)
+        self.root.option_add("*Entry.foreground", TEXT_COLOR)
+        self.root.option_add("*Listbox.foreground", TEXT_COLOR)
 
     def card(self, parent, title):
-        frame = tk.LabelFrame(
+        frame = tk.Frame(
             parent,
+            bg=CARD_BG,
+            highlightbackground="#d5dce8",
+            highlightcolor="#d5dce8",
+            highlightthickness=1,
+            padx=14,
+            pady=12,
+        )
+        tk.Label(
+            frame,
             text=title,
             bg=CARD_BG,
             fg=TEXT_COLOR,
             font=("Helvetica", 13, "bold"),
-            bd=1,
-            relief="solid",
-            padx=14,
-            pady=12,
-        )
+        ).pack(anchor="w", pady=(0, 10))
         return frame
 
     def button(self, parent, text, command, danger=False):
@@ -223,37 +233,38 @@ class PillReminderApp:
         )
 
     def build_ui(self):
-        main = tk.Frame(self.root, bg=WINDOW_BG, padx=18, pady=18)
+        main = tk.Frame(self.root, bg=WINDOW_BG, padx=16, pady=14)
         main.pack(fill="both", expand=True)
 
+        header = tk.Frame(main, bg=WINDOW_BG)
+        header.pack(fill="x", pady=(0, 12))
+
         tk.Label(
-            main,
-            text=APP_NAME,
+            header,
+            text=f"{APP_NAME} Dashboard",
             bg=WINDOW_BG,
             fg=TEXT_COLOR,
             font=("Helvetica", 24, "bold"),
-        ).pack(anchor="w")
+        ).pack(side="left")
         tk.Label(
-            main,
-            text="Daily pill reminders, one-time reminders, snooze, and taken history.",
+            header,
+            text=APP_VERSION,
             bg=WINDOW_BG,
             fg=MUTED_COLOR,
             font=("Helvetica", 12),
-        ).pack(
-            anchor="w",
-            pady=(2, 14),
-        )
+        ).pack(side="right", pady=(8, 0))
 
         body = tk.Frame(main, bg=WINDOW_BG)
         body.pack(fill="both", expand=True)
-        body.columnconfigure(0, weight=1)
-        body.columnconfigure(1, weight=1)
-        body.rowconfigure(1, weight=1)
-        body.rowconfigure(2, weight=1)
-        body.rowconfigure(3, weight=1)
 
-        today_frame = self.card(body, "Today")
-        today_frame.grid(row=0, column=0, sticky="ew", padx=(0, 8), pady=(0, 12))
+        left_column = tk.Frame(body, bg=WINDOW_BG)
+        left_column.pack(side="left", fill="both", expand=True, padx=(0, 8))
+
+        right_column = tk.Frame(body, bg=WINDOW_BG)
+        right_column.pack(side="left", fill="both", expand=True, padx=(8, 0))
+
+        today_frame = self.card(left_column, "Today")
+        today_frame.pack(fill="x", pady=(0, 12))
 
         pill_row = tk.Frame(today_frame, bg=CARD_BG)
         pill_row.pack(fill="x", pady=(0, 10))
@@ -280,8 +291,8 @@ class PillReminderApp:
         self.button(today_actions, "Reset Today", self.reset_today).pack(side="left", padx=(0, 8))
         self.button(today_actions, "Test Reminder", self.show_test_reminder).pack(side="left")
 
-        progress_frame = self.card(body, "Last 14 Days")
-        progress_frame.grid(row=1, column=0, sticky="ew", padx=(0, 8), pady=(0, 12))
+        progress_frame = self.card(left_column, "Last 14 Days")
+        progress_frame.pack(fill="x", pady=(0, 12))
 
         self.day_grid = tk.Frame(progress_frame, bg=CARD_BG)
         self.day_grid.pack(fill="x")
@@ -305,8 +316,8 @@ class PillReminderApp:
             day_label.grid(row=index // 7, column=index % 7, sticky="ew", padx=2, pady=2)
             self.day_labels.append(day_label)
 
-        daily_frame = self.card(body, "Daily Reminders")
-        daily_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 8), pady=(0, 12))
+        daily_frame = self.card(left_column, "Daily Reminders")
+        daily_frame.pack(fill="x", pady=(0, 12))
 
         daily_input = tk.Frame(daily_frame, bg=CARD_BG)
         daily_input.pack(anchor="w")
@@ -355,8 +366,8 @@ class PillReminderApp:
             pady=(10, 0),
         )
 
-        one_time_frame = self.card(body, "One-Time Reminder")
-        one_time_frame.grid(row=3, column=0, sticky="ew", padx=(0, 8))
+        one_time_frame = self.card(left_column, "One-Time Reminder")
+        one_time_frame.pack(fill="x")
 
         one_time_input = tk.Frame(one_time_frame, bg=CARD_BG)
         one_time_input.pack(anchor="w")
@@ -385,14 +396,14 @@ class PillReminderApp:
         self.button(one_time_input, "Add One-Time", self.add_one_time_reminder).pack(side="left", padx=(12, 0))
         self.label(one_time_frame, "Date format: YYYY-MM-DD", muted=True).pack(anchor="w", pady=(8, 0))
 
-        upcoming_frame = self.card(body, "Upcoming Reminders")
-        upcoming_frame.grid(row=0, column=1, rowspan=3, sticky="nsew", padx=(8, 0), pady=(0, 12))
-        upcoming_frame.rowconfigure(0, weight=1)
-        upcoming_frame.columnconfigure(0, weight=1)
+        upcoming_frame = self.card(right_column, "Upcoming Reminders")
+        upcoming_frame.pack(fill="both", expand=True, pady=(0, 12))
 
+        upcoming_list_frame = tk.Frame(upcoming_frame, bg=CARD_BG)
+        upcoming_list_frame.pack(fill="both", expand=True)
         self.upcoming_listbox = tk.Listbox(
-            upcoming_frame,
-            height=15,
+            upcoming_list_frame,
+            height=12,
             exportselection=False,
             bg="#fbfdff",
             fg=TEXT_COLOR,
@@ -401,14 +412,14 @@ class PillReminderApp:
             bd=1,
             font=("Menlo", 12),
         )
-        self.upcoming_listbox.grid(row=0, column=0, sticky="nsew")
+        self.upcoming_listbox.pack(side="left", fill="both", expand=True)
 
-        upcoming_scrollbar = tk.Scrollbar(upcoming_frame, orient="vertical", command=self.upcoming_listbox.yview)
-        upcoming_scrollbar.grid(row=0, column=1, sticky="ns")
+        upcoming_scrollbar = tk.Scrollbar(upcoming_list_frame, orient="vertical", command=self.upcoming_listbox.yview)
+        upcoming_scrollbar.pack(side="left", fill="y")
         self.upcoming_listbox.configure(yscrollcommand=upcoming_scrollbar.set)
 
         upcoming_actions = tk.Frame(upcoming_frame, bg=CARD_BG)
-        upcoming_actions.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        upcoming_actions.pack(anchor="w", pady=(10, 0))
 
         self.button(upcoming_actions, "Mark Taken", self.mark_selected_upcoming_taken).pack(
             side="left",
@@ -420,13 +431,13 @@ class PillReminderApp:
         )
         self.button(upcoming_actions, "Refresh", self.refresh_all).pack(side="left")
 
-        history_frame = self.card(body, "Taken History")
-        history_frame.grid(row=3, column=1, sticky="nsew", padx=(8, 0))
-        history_frame.rowconfigure(0, weight=1)
-        history_frame.columnconfigure(0, weight=1)
+        history_frame = self.card(right_column, "Taken History")
+        history_frame.pack(fill="both", expand=True)
 
+        history_list_frame = tk.Frame(history_frame, bg=CARD_BG)
+        history_list_frame.pack(fill="both", expand=True)
         self.history_listbox = tk.Listbox(
-            history_frame,
+            history_list_frame,
             height=8,
             width=42,
             exportselection=False,
@@ -436,14 +447,14 @@ class PillReminderApp:
             relief="solid",
             bd=1,
         )
-        self.history_listbox.grid(row=0, column=0, sticky="nsew")
+        self.history_listbox.pack(side="left", fill="both", expand=True)
 
-        history_scrollbar = tk.Scrollbar(history_frame, orient="vertical", command=self.history_listbox.yview)
-        history_scrollbar.grid(row=0, column=1, sticky="ns")
+        history_scrollbar = tk.Scrollbar(history_list_frame, orient="vertical", command=self.history_listbox.yview)
+        history_scrollbar.pack(side="left", fill="y")
         self.history_listbox.configure(yscrollcommand=history_scrollbar.set)
 
         history_actions = tk.Frame(history_frame, bg=CARD_BG)
-        history_actions.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        history_actions.pack(anchor="w", pady=(10, 0))
 
         self.button(history_actions, "Undo Last Taken", self.undo_last_taken).pack(side="left", padx=(0, 8))
         self.button(history_actions, "Clear History", self.clear_history, danger=True).pack(side="left")
