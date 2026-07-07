@@ -125,6 +125,27 @@ def refresh_reminder_list():
         reminder_listbox.insert(tk.END, reminder)
 
 
+def get_history_entries():
+    history = app_data.get("history", [])
+
+    if not isinstance(history, list):
+        return []
+
+    return history
+
+
+def refresh_history_list():
+    history_listbox.delete(0, tk.END)
+    history = get_history_entries()
+
+    if not history:
+        history_listbox.insert(tk.END, "No pills marked taken yet.")
+        return
+
+    for entry in reversed(history):
+        history_listbox.insert(tk.END, entry)
+
+
 def update_next_reminder_label():
     next_reminder_label.config(text=get_next_reminder_text())
 
@@ -196,7 +217,7 @@ last_taken_time = app_data.get("last_taken_time")
 
 window = tk.Tk()
 window.title("Pill Reminder")
-window.geometry("520x680")
+window.geometry("560x760")
 
 title_label = tk.Label(window, text="Pill Reminder", font=("Helvetica", 20, "bold"))
 title_label.pack(pady=(20, 8))
@@ -256,6 +277,20 @@ else:
 status_label = tk.Label(window, text=status_text)
 status_label.pack(pady=6)
 
+taken_history_frame = tk.Frame(window)
+taken_history_frame.pack(pady=(8, 12))
+
+taken_history_title = tk.Label(taken_history_frame, text="Taken history")
+taken_history_title.pack(anchor="w")
+
+history_listbox = tk.Listbox(taken_history_frame, height=7, width=30)
+history_listbox.pack(side="left")
+
+history_scrollbar = tk.Scrollbar(taken_history_frame, orient="vertical", command=history_listbox.yview)
+history_scrollbar.pack(side="left", fill="y")
+history_listbox.config(yscrollcommand=history_scrollbar.set)
+refresh_history_list()
+
 
 def add_new_reminder():
     hour = hour_spinbox.get().strip().zfill(2)
@@ -307,12 +342,12 @@ def mark_taken():
     app_data["last_taken"] = today
     app_data["last_taken_time"] = formatted_time
     app_data["snoozes"] = []
-    history = app_data.get("history", [])
+    history = get_history_entries()
     history.append(formatted_time)
-    app_data["history"] = history[-5:]
+    app_data["history"] = history[-60:]
     save_data()
     status_label.config(text=f"Taken: {formatted_time}")
-    history_label.config(text=get_history_text())
+    refresh_history_list()
     update_next_reminder_label()
 
 
@@ -330,7 +365,7 @@ def reset_today():
 def clear_history():
     app_data["history"] = []
     save_data()
-    history_label.config(text=get_history_text())
+    refresh_history_list()
     messagebox.showinfo("History Cleared", "Recent taken history has been cleared.")
 
 
@@ -348,15 +383,6 @@ def snooze_reminder():
     minute_spinbox.insert(0, minute)
     update_next_reminder_label()
     messagebox.showinfo("Snoozed", f"Reminder snoozed until {reminder_time}.")
-
-
-def get_history_text():
-    history = app_data.get("history", [])
-
-    if not history:
-        return "Recent history: none yet"
-
-    return "Recent history:\n" + "\n".join(history[-5:])
 
 
 def check_reminder():
@@ -413,9 +439,6 @@ clear_history_button.pack(pady=4)
 
 test_button = tk.Button(window, text="Test Notification", command=show_reminder)
 test_button.pack(pady=4)
-
-history_label = tk.Label(window, text=get_history_text(), justify="left")
-history_label.pack(pady=(8, 0))
 
 check_reminder()
 

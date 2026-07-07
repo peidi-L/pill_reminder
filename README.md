@@ -28,8 +28,8 @@ The app saves your reminder settings to:
 - Add custom reminder times.
 - Remove reminder times.
 - Mark the pill as taken for today.
+- View past taken times in the Taken history list.
 - Snooze from the reminder popup.
-- See recent taken history.
 - Get a macOS notification and an app popup.
 
 ## Important
