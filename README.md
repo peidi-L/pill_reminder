@@ -20,11 +20,12 @@ run_pill_reminder.command
 The app saves your reminder settings to:
 
 ```text
-~/.pill_reminder.json
+~/Library/Application Support/Pill Reminder/data.json
 ```
 
 ## Current Features
 
+- Tabbed desktop interface: Today, Reminders, History, and Settings.
 - Add daily reminder times.
 - Add one-time reminders for any future date and time.
 - See all upcoming daily, one-time, and snoozed reminders.
@@ -33,6 +34,7 @@ The app saves your reminder settings to:
 - View past taken times in the Taken history list.
 - Snooze from the reminder popup.
 - Get a macOS notification and an app popup.
+- Open the app data folder from Settings.
 
 ## Important
 
