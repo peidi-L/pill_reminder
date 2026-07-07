@@ -35,18 +35,43 @@ def is_valid_time(value):
     return True
 
 
-def get_saved_reminder_time():
-    saved_time = app_data.get("reminder_time", "21:00")
+def get_saved_reminders():
+    saved_reminders = app_data.get("reminders")
 
-    if is_valid_time(saved_time):
-        return saved_time
+    if isinstance(saved_reminders, list):
+        valid_reminders = [time for time in saved_reminders if is_valid_time(time)]
 
-    return "21:00"
+        if valid_reminders:
+            return sorted(set(valid_reminders))
+
+    old_reminder_time = app_data.get("reminder_time", "21:00")
+
+    if is_valid_time(old_reminder_time):
+        return [old_reminder_time]
+
+    return ["21:00"]
 
 
-def show_reminder():
-    message = "Time to take your birth control pill."
+def get_reminders_text():
+    reminders = app_data.get("reminders", ["21:00"])
+    return "Reminder times: " + ", ".join(reminders)
 
+
+def add_reminder_time(reminder_time):
+    reminders = app_data.get("reminders", [])
+
+    if reminder_time in reminders:
+        return False
+
+    reminders.append(reminder_time)
+    app_data["reminders"] = sorted(reminders)
+    app_data["reminder_time"] = reminder_time
+    save_data()
+    reminder_label.config(text=get_reminders_text())
+    return True
+
+
+def send_mac_notification(message):
     try:
         subprocess.run(
             [
@@ -59,11 +84,37 @@ def show_reminder():
     except FileNotFoundError:
         pass
 
-    messagebox.showinfo("Pill Reminder", message)
+
+def show_reminder(reminder_time=None):
+    message = "Time to take your birth control pill."
+    send_mac_notification(message)
+
+    popup = tk.Toplevel(window)
+    popup.title("Pill Reminder")
+    popup.geometry("320x180")
+    popup.resizable(False, False)
+
+    tk.Label(popup, text=message, font=("Helvetica", 14, "bold")).pack(pady=(18, 6))
+
+    if reminder_time:
+        tk.Label(popup, text=f"Reminder time: {reminder_time}").pack(pady=(0, 14))
+    else:
+        tk.Label(popup, text="Test reminder").pack(pady=(0, 14))
+
+    button_frame = tk.Frame(popup)
+    button_frame.pack(pady=8)
+
+    tk.Button(button_frame, text="Taken", command=lambda: [mark_taken(), popup.destroy()]).pack(side="left", padx=4)
+    tk.Button(button_frame, text="Snooze 10 Min", command=lambda: [snooze_reminder(), popup.destroy()]).pack(
+        side="left",
+        padx=4,
+    )
+    tk.Button(button_frame, text="Dismiss", command=popup.destroy).pack(side="left", padx=4)
 
 
 app_data = load_data()
-reminder_time = get_saved_reminder_time()
+app_data["reminders"] = get_saved_reminders()
+reminder_time = app_data["reminders"][0]
 reminder_hour, reminder_minute = reminder_time.split(":")
 last_taken = app_data.get("last_taken")
 last_taken_time = app_data.get("last_taken_time")
@@ -97,7 +148,7 @@ minute_spinbox.delete(0, tk.END)
 minute_spinbox.insert(0, reminder_minute)
 minute_spinbox.pack(side="left")
 
-reminder_label = tk.Label(window, text=f"Next reminder: {reminder_time}")
+reminder_label = tk.Label(window, text=get_reminders_text())
 reminder_label.pack(pady=(8, 16))
 
 if last_taken == date.today().isoformat():
@@ -114,7 +165,7 @@ tip_label = tk.Label(window, text="Choose a 24-hour time, like 09:00 or 21:30.")
 tip_label.pack(pady=(0, 10))
 
 
-def save_reminder_time():
+def add_new_reminder():
     hour = hour_spinbox.get().strip().zfill(2)
     minute = minute_spinbox.get().strip().zfill(2)
     reminder_time = f"{hour}:{minute}"
@@ -123,10 +174,11 @@ def save_reminder_time():
         messagebox.showerror("Invalid time", "Please enter time as HH:MM, like 21:00.")
         return
 
-    app_data["reminder_time"] = reminder_time
-    save_data()
-    reminder_label.config(text=f"Next reminder: {reminder_time}")
-    messagebox.showinfo("Saved", f"Reminder time saved for {reminder_time}.")
+    if not add_reminder_time(reminder_time):
+        messagebox.showinfo("Already Added", f"{reminder_time} is already in your reminders.")
+        return
+
+    messagebox.showinfo("Added", f"New reminder added for {reminder_time}.")
 
 
 def mark_taken():
@@ -152,6 +204,7 @@ def reset_today():
     app_data.pop("last_taken", None)
     app_data.pop("last_taken_time", None)
     app_data.pop("reminder_shown_for", None)
+    app_data["reminders_shown"] = []
     save_data()
     status_label.config(text="Status: not taken today")
 
@@ -167,14 +220,11 @@ def snooze_reminder():
     snooze_time = datetime.now() + timedelta(minutes=10)
     reminder_time = snooze_time.strftime("%H:%M")
     hour, minute = reminder_time.split(":")
-    app_data["reminder_time"] = reminder_time
-    app_data.pop("reminder_shown_for", None)
-    save_data()
+    add_reminder_time(reminder_time)
     hour_spinbox.delete(0, tk.END)
     hour_spinbox.insert(0, hour)
     minute_spinbox.delete(0, tk.END)
     minute_spinbox.insert(0, minute)
-    reminder_label.config(text=f"Next reminder: {reminder_time}")
     messagebox.showinfo("Snoozed", f"Reminder snoozed until {reminder_time}.")
 
 
@@ -193,17 +243,19 @@ def check_reminder():
     current_time = now.strftime("%H:%M")
 
     already_taken = app_data.get("last_taken") == today
-    already_reminded = app_data.get("reminder_shown_for") == today
+    reminder_key = f"{today}:{current_time}"
+    reminders_shown = app_data.get("reminders_shown", [])
 
-    if current_time == app_data.get("reminder_time", "21:00") and not already_taken and not already_reminded:
-        app_data["reminder_shown_for"] = today
+    if current_time in app_data.get("reminders", ["21:00"]) and not already_taken and reminder_key not in reminders_shown:
+        reminders_shown.append(reminder_key)
+        app_data["reminders_shown"] = reminders_shown[-20:]
         save_data()
-        show_reminder()
+        show_reminder(current_time)
 
     window.after(30000, check_reminder)
 
 
-save_button = tk.Button(window, text="Save Reminder Time", command=save_reminder_time)
+save_button = tk.Button(window, text="Add Reminder", command=add_new_reminder)
 save_button.pack(pady=4)
 
 taken_button = tk.Button(window, text="Taken Today", command=mark_taken)
@@ -217,9 +269,6 @@ clear_history_button.pack(pady=4)
 
 test_button = tk.Button(window, text="Test Reminder", command=show_reminder)
 test_button.pack(pady=4)
-
-snooze_button = tk.Button(window, text="Snooze 10 Minutes", command=snooze_reminder)
-snooze_button.pack(pady=4)
 
 history_label = tk.Label(window, text=get_history_text(), justify="left")
 history_label.pack(pady=(8, 0))
