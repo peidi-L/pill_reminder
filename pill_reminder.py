@@ -70,7 +70,7 @@ last_taken_time = app_data.get("last_taken_time")
 
 window = tk.Tk()
 window.title("Pill Reminder")
-window.geometry("460x460")
+window.geometry("460x500")
 
 title_label = tk.Label(window, text="Pill Reminder", font=("Helvetica", 20, "bold"))
 title_label.pack(pady=(20, 8))
@@ -156,6 +156,13 @@ def reset_today():
     status_label.config(text="Status: not taken today")
 
 
+def clear_history():
+    app_data["history"] = []
+    save_data()
+    history_label.config(text=get_history_text())
+    messagebox.showinfo("History Cleared", "Recent taken history has been cleared.")
+
+
 def snooze_reminder():
     snooze_time = datetime.now() + timedelta(minutes=10)
     reminder_time = snooze_time.strftime("%H:%M")
@@ -204,6 +211,9 @@ taken_button.pack(pady=8)
 
 reset_button = tk.Button(window, text="Reset Today", command=reset_today)
 reset_button.pack(pady=4)
+
+clear_history_button = tk.Button(window, text="Clear History", command=clear_history)
+clear_history_button.pack(pady=4)
 
 test_button = tk.Button(window, text="Test Reminder", command=show_reminder)
 test_button.pack(pady=4)
