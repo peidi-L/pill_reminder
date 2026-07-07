@@ -3,7 +3,7 @@
 # Keep the app open for the reminder popup to appear at the saved time.
 
 import tkinter as tk
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 import json
 import subprocess
@@ -130,6 +130,18 @@ def reset_today():
     status_label.config(text="Status: not taken today")
 
 
+def snooze_reminder():
+    snooze_time = datetime.now() + timedelta(minutes=10)
+    reminder_time = snooze_time.strftime("%H:%M")
+    app_data["reminder_time"] = reminder_time
+    app_data.pop("reminder_shown_for", None)
+    save_data()
+    time_entry.delete(0, tk.END)
+    time_entry.insert(0, reminder_time)
+    reminder_label.config(text=f"Next reminder: {reminder_time}")
+    messagebox.showinfo("Snoozed", f"Reminder snoozed until {reminder_time}.")
+
+
 def get_history_text():
     history = app_data.get("history", [])
 
@@ -166,6 +178,9 @@ reset_button.pack(pady=4)
 
 test_button = tk.Button(window, text="Test Reminder", command=show_reminder)
 test_button.pack(pady=4)
+
+snooze_button = tk.Button(window, text="Snooze 10 Minutes", command=snooze_reminder)
+snooze_button.pack(pady=4)
 
 history_label = tk.Label(window, text=get_history_text(), justify="left")
 history_label.pack(pady=(8, 0))
