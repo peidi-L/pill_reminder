@@ -131,9 +131,14 @@ def save_reminder_time():
 
 def mark_taken():
     time_taken = datetime.now()
+    today = time_taken.date().isoformat()
     formatted_time = time_taken.strftime("%Y-%m-%d at %H:%M")
 
-    app_data["last_taken"] = time_taken.date().isoformat()
+    if app_data.get("last_taken") == today:
+        messagebox.showinfo("Already Marked", "You already marked today's pill as taken.")
+        return
+
+    app_data["last_taken"] = today
     app_data["last_taken_time"] = formatted_time
     history = app_data.get("history", [])
     history.append(formatted_time)
